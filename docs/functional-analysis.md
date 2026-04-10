@@ -2,24 +2,22 @@
 
 ## 1. Product Vision
 
-Finadoc is an AI-powered application for analyzing financial documents, designed for an Italian asset management company (SGR — *Società di Gestione del Risparmio*). Its goal is to support internal users in extracting, interpreting, and managing the information contained in complex financial documents, reducing manual work and increasing the reliability of analyses.
+Finadoc is an AI tool for analyzing financial documents, built for an Italian SGR (*Società di Gestione del Risparmio*). The core problem it addresses is simple: reading fund documents carefully enough to catch every number, every inconsistency, every regulatory threshold breach — without making mistakes. That takes a lot of time and attention, and errors still happen.
 
-The POC focuses on three core use cases:
-1. **Structured extraction** of fund factsheet data (asset allocation, performance, transactions, ESG).
-2. **Red flag / anomaly detection** on fund and target-company financial reports.
-3. **Summarization** of regulatory communications.
+The POC covers three use cases:
+1. Structured extraction from fund factsheets — asset allocation, performance, transactions, ESG.
+2. Red flag and anomaly detection on fund and target-company reports.
+3. Summarization of regulatory communications (Consob, Bank of Italy, ESMA).
 
-The output is always a **PDF report in English**, with mandatory citation of every extracted data point back to its source page.
+Output is always a PDF report in English. Every extracted value references the page it came from.
 
 ---
 
-> **Formatting note**: User answers (collected from MR — the user's initials) are reported in dedicated lines prefixed with `▶ MR:` in bold, to visually distinguish them from the questions.
+> **Formatting note**: Answers from MR are shown on dedicated lines prefixed with `▶ MR:`.
 
 ---
 
 ## 2. Open Questions (round 1)
-
-The questions below were used to define functional requirements. They are grouped by topic.
 
 ### 2.1 Business context and users
 
@@ -154,8 +152,6 @@ The questions below were used to define functional requirements. They are groupe
 
 ## 2bis. Follow-up Questions (round 2)
 
-Based on the first round of answers, additional clarification was needed on a few points.
-
 ### A. Output trust (important tension)
 
 The main pain point is *"reading the data without making mistakes"* and the success metrics are *"reduced errors + time saved"*. At the same time, the requested automation level is *"fully automatic output, no review workflow"*.
@@ -262,174 +258,151 @@ H3. **Mistral**: existing account / API key, or to be created? OK to use **Mistr
 
 ## 3. Functional Requirements
 
-This section is consolidated based on the answers in sections 2 and 2bis. It describes the **POC scope**.
+### 3.0 Scope
 
-### 3.0 POC scope
+The POC is a web app that runs locally on a laptop. A logged-in user uploads a PDF or Excel file and receives a multi-page PDF report in English — automatically, without any review step in between. The analysis calls Mistral (EU-hosted SaaS API) and applies three quality checks: mandatory source citation, per-value confidence flags, and cross-source consistency verification.
 
-Finadoc POC is a **web application installable locally (laptop)** that lets an authenticated user upload financial documents (PDF, Excel) of a fund, analyze them automatically through a European LLM (Mistral, in SaaS mode), and obtain as output a **PDF report in English** containing:
+Three use cases are in scope: structured extraction (PM group), red flag detection (RM group), and regulatory summarization.
 
-1. **Structured extraction** of fund factsheet data (asset allocation by country of risk, by rating, by security classification — Equity/Bond/Fund/Derivatives).
-2. **Red flag / anomaly detection** on the extracted data (numerical inconsistencies, deviations vs prior period, breach of regulatory thresholds).
-3. **Summarization** of regulatory communications.
+### 3.1 Roles
 
-Every extracted data point is **cited with reference to the source document page/paragraph**.
+| Role | Description |
+|---|---|
+| **Admin** | Created on first run. Manages users, groups, and application configuration. |
+| **Portfolio Manager (PM)** | Analyzes factsheets: asset allocation, performance, ESG, transactions. |
+| **Risk Manager (RM)** | Detects anomalies: flags numerical inconsistencies, threshold breaches, and deviations vs. prior period. |
 
-### 3.1 Actors and roles
+Users can belong to both groups simultaneously. Each group has a distinct AI context: its own system prompts, knowledge base, and extraction templates. No fine-tuning in the POC.
 
-| Actor | Description | Main use cases |
-|---|---|---|
-| **Admin** | Administrative user created on first run. Manages users, groups, configuration. | Login, user/group management, password change, LDAPs configuration. |
-| **Portfolio Manager / Analyst (PM)** | User who analyzes factsheets and extracts asset allocation, performance, ESG, transactions. | Document upload, PM analysis, PDF report download. |
-| **Risk Manager (RM)** | User who detects anomalies, red flags, deviations, threshold breaches. | Document upload, Risk analysis, PDF report download. |
+### 3.2 Features
 
-**Notes on roles**:
-- A user can belong to **multiple groups** (e.g. PM + RM).
-- Each group has a **dedicated AI context**: specific prompts, separate knowledge base/RAG, own extraction templates. **No fine-tuning** in the POC (possible future evolution).
-- Initial groups for the POC: **2** — PM and RM.
+#### Authentication
 
-### 3.2 Main features
+On first startup, if no admin exists, a setup screen collects the initial admin password. After that, login is username + password. Users can change their own password; the admin manages accounts and group assignments.
 
-#### F1 — Authentication and user management
-- F1.1 On first application start, an **admin user** is created with a password set during setup; the password can be changed later.
-- F1.2 Login with **username + password** (internal form).
-- F1.3 Support for **LDAPs** authentication against an external directory (configurable).
-- F1.4 User and group management by the admin (CRUD).
-- F1.5 A user can be assigned to **one or more groups** (PM, RM).
-- F1.6 User password change.
+LDAPs is part of the design — the auth layer uses an `IAuthProvider` interface, and the configuration model (host, port, base DN, bind credentials, TLS certificate) is fully defined. The actual directory binding is not implemented in the POC; the LDAPs provider stubs the interface methods.
 
-> **Decision (§3.6)**: LDAPs is architecturally prepared in the POC — an abstraction layer/interface is defined, but the concrete LDAPs binding is deferred to a later version.
+#### Document upload
 
-#### F2 — Document upload and management
-- F2.1 Manual upload from the web UI (drag & drop or file picker).
-- F2.2 Supported formats: **PDF** (native) and **Excel** (.xlsx).
-- F2.3 Document languages: **Italian and English** (also multilingual within the same document).
-- F2.4 Maximum size per document: **10 pages** (assumed limit ~10 MB).
-- F2.5 No versioning: a re-uploaded document is treated as a new analysis.
-- F2.6 Expected volumes at full rollout: **~100 documents / user / month**.
+Manual upload via drag & drop or file picker. Accepted formats: PDF (native, text-based) and Excel (.xlsx). Documents can be Italian, English, or mixed. Hard limit: 10 pages per document. Re-uploading the same file creates a new analysis — no versioning.
 
-#### F3 — AI analysis
-The analysis is **fully automatic** (no human review workflow), but quality is ensured by three parallel mechanisms:
-- F3.1 **Mandatory source citation** for every extracted data point (page/section number of the source).
-- F3.2 **Confidence flag** for each data point: below a configurable threshold the data is marked as *"to be verified"*.
-- F3.3 **Cross-source check**: the same data extracted from multiple points in the document is compared; inconsistencies are flagged.
+#### AI analysis
 
-##### F3.A — Structured extraction (PM group)
-- F3.A.1 Extraction of **asset allocation** by:
-  - country of risk
-  - rating
-  - security classification: Equity / Bond / Fund / Derivatives
-- F3.A.2 Extraction of **fund performance** (period return, benchmark, risk indicators if available).
-- F3.A.3 Extraction of **transactions** for the period (purchases/sales, amounts).
-- F3.A.4 Extraction of **ESG data** (rating, sustainable exposure, controversies if any).
-- F3.A.5 Each extracted data point is normalized into a **common internal data model** (to enable comparisons and validations).
+After upload, the pipeline runs without user intervention: text extraction → PII masking → Mistral call → response parsing → consistency check → PDF generation.
 
-##### F3.B — Red flag / anomaly detection (RM group)
-- F3.B.1 **Internal numerical inconsistencies** (totals that don't reconcile, percentages that don't sum to 100%, etc.).
-- F3.B.2 **Significant deviations vs prior period** (requires at least two documents of the same fund to be meaningful; optional in the POC).
-- F3.B.3 **Breach of regulatory thresholds** (concentration, leverage, UCITS/AIFMD limits where applicable and derivable from the document).
-- F3.B.4 Each red flag is classified by **severity** (info / warning / critical) and accompanied by the source reference.
+Three quality mechanisms run on every analysis:
+- Each extracted value cites its source page or section.
+- Each value carries a confidence flag (high / medium / low); anything below threshold is marked "to be verified" in the report.
+- Values that appear in more than one part of the document are compared; discrepancies surface as warnings.
 
-##### F3.C — Regulatory communication summarization
-- F3.C.1 Generation of an **executive summary in English** of a regulatory communication (Consob, Bank of Italy, ESMA).
-- F3.C.2 Identification of any **regulatory references** mentioned in the document (MiFID II, AIFMD, UCITS, DORA, AI Act) **only if explicitly present**.
-- F3.C.3 Identification of **required actions** or **deadlines** mentioned, if any.
+**PM — Structured extraction**
 
-#### F4 — Output: PDF report
-- F4.1 The output of every analysis is a **multi-page PDF** in **English**.
-- F4.2 For the POC the **template is free-form** (no corporate header/footer). A formal template will be provided in a later version.
-- F4.3 The PDF contains at least:
-  - Header with metadata (source document name, analysis date, group/context used, user)
-  - Extracted data section (with source citation and confidence flags)
-  - Red flags section (for RM analyses)
-  - Summary section (for analyses on regulatory communications)
-  - Disclaimer
-- F4.4 The PDF report is **downloadable** from the UI.
+Targets factsheets and periodic reports. Extracts:
+- Asset allocation by country of risk, by rating, and by asset class (Equity / Bond / Fund / Derivatives)
+- Fund performance: period return, benchmark return, risk indicators where present
+- Transactions: type (buy/sell), instrument, ISIN, amount, currency, date
+- ESG: rating, sustainable exposure %, any controversies mentioned
 
-#### F5 — Audit trail
-- F5.1 Tracking of all the following events: **login**, **document upload**, **analysis generated**, **PDF download**, **document/analysis deletion**, **administrative events** (user/group create/update).
-- F5.2 Each event records: timestamp, user, action, target object, outcome.
-- F5.3 Audit log retention: **90 days**.
+All fields are normalized into a shared internal data model.
 
-#### F6 — Retention and data lifecycle
-- F6.1 Uploaded documents and generated analyses are kept for **90 days**, then automatically deleted (both documents and analyses).
-- F6.2 Users can manually delete their own documents/analyses earlier.
+**RM — Red flag detection**
 
-#### F7 — Privacy and protection of sensitive data
-- F7.1 Before content is sent to the external LLM (Mistral SaaS), a **masking/pseudonymization** step is applied to personal and potentially sensitive data (client names, tax IDs, IBANs, etc.).
-- F7.2 Masking is reversible on the application side for final presentation to the authorized user (where applicable).
+Targets fund and target-company financial reports. Flags:
+- Percentage breakdowns that don't sum to 100% (tolerance: ±0.1%)
+- Values that appear inconsistently across sections of the same document
+- Breaches of UCITS/AIFMD concentration or leverage thresholds, where derivable from the document text
+- Material deviations vs. the prior period — requires two documents; treated as optional in the POC
+
+Each flag carries a severity (info / warning / critical) and a source page reference.
+
+**Regulatory summary**
+
+For communications from Consob, Bank of Italy, or ESMA. Produces:
+- Executive summary in English
+- List of regulatory references explicitly cited in the text (MiFID II, AIFMD, UCITS, DORA, AI Act) — nothing inferred
+- Any required actions or deadlines mentioned
+
+#### Output: PDF report
+
+Every analysis produces a multi-page PDF in English. Free-form layout in the POC (no corporate template). The PDF contains:
+- Header: document name, analysis date, group context, user
+- Extraction tables with source page and confidence badge on each row (PM)
+- Red flags sorted by severity, critical first (RM)
+- Executive summary, regulatory references, deadlines table (regulatory)
+- Disclaimer: *"This report was generated automatically by an AI system. All data should be verified against the source document."*
+
+The report is downloadable from the UI.
+
+#### Audit trail
+
+Events logged: login, document upload, analysis generated, PDF downloaded, document/analysis deleted, admin actions (user/group changes). Each record contains timestamp, user ID, action, target, and outcome. Retention: 90 days.
+
+#### Data lifecycle
+
+Documents and analyses are automatically deleted after 90 days — both the stored file and the database record. Users can delete their own data earlier. Cleanup runs as a daily background job.
+
+#### PII masking
+
+Before any text is sent to Mistral, the pipeline detects and replaces sensitive entities (names, IBANs, tax IDs, phone numbers, etc.) with indexed placeholders. The mapping lives in memory only — never written to disk or sent externally. For the final PDF, original values are restored where the user is authorized to see them. Full Presidio-based implementation, not a regex shortcut — the masking has to be reliable on real documents from day one.
 
 ### 3.3 User flows
 
-#### Flow A — First start (Admin)
-1. The admin starts the application for the first time.
-2. A setup screen prompts to set the admin password.
-3. The admin logs in and configures: users, groups (PM, RM), assignments, optional LDAPs connection.
+**First startup — admin setup**
+1. App starts; no users in DB → setup screen collects admin password.
+2. Admin logs in, creates users, assigns groups, optionally configures the LDAPs connection.
 
-#### Flow B — PM analysis on a factsheet
-1. The PM user logs in.
-2. Selects the **PM** context (if member of multiple groups).
-3. Uploads a factsheet PDF/Excel.
-4. The app runs: pre-processing → masking → call to Mistral → structured extraction → cross-source check → PDF generation.
-5. The user previews and downloads the PDF.
+**PM analysis on a factsheet**
+1. User logs in, selects PM context (if member of both groups).
+2. Uploads a PDF or Excel factsheet.
+3. Pipeline runs; user waits for completion.
+4. Report appears in the UI; user previews and downloads the PDF.
 
-#### Flow C — Risk analysis on a fund or target-company report
-1. The RM user logs in.
-2. Selects the **RM** context.
-3. Uploads a financial report.
-4. The app runs red flag analysis.
-5. PDF output with anomalies classified by severity and source citation.
+**RM analysis on a fund or target-company report**
+1. User logs in, selects RM context.
+2. Uploads the financial report.
+3. Pipeline runs red flag analysis.
+4. PDF output lists anomalies sorted by severity, each with source reference.
 
-#### Flow D — Regulatory communication summary
-1. The user uploads a regulatory document.
-2. The app generates an English summary, with the list of cited regulatory references and any deadlines.
-3. PDF output.
+**Regulatory document summary**
+1. User uploads a regulatory communication.
+2. App returns a PDF with the executive summary, referenced regulatory provisions, and any deadlines found in the text.
 
 ### 3.4 Non-functional requirements
 
-| Category | Requirement |
+| | |
 |---|---|
-| **Architecture** | Backend API in **.NET Core**; AI pipeline / LLM orchestration in **Python**; desktop-first web app. |
-| **LLM** | **Mistral** in **SaaS API** mode (hosted in EU). Account to be created; setup instructions included in the technical documentation. |
-| **Localization** | Bilingual UI IT/EN (at least EN guaranteed in the POC); output always in English. |
-| **Tenancy** | Single-tenant in the POC (one SGR only). |
-| **POC deployment** | Runnable on a **local laptop** (Linux/Windows). Containerization optional but recommended (Docker Compose). |
-| **Data residency** | All data stays in EU/Italy. No external non-EU services. |
-| **Security** | Standard password hashing (bcrypt/argon2), TLS for LDAPs, secret management for the Mistral API key. |
-| **Cost** | Minimize LLM cost (pick the cheapest Mistral model compatible with sufficient quality — e.g. `mistral-small`/`mistral-medium`). |
-| **Compliance** | Traceability via audit trail (90 days). Explainability via source citation and confidence flags. AI Act: likely classified as a limited-risk system. |
-| **Accessibility** | Not a constraint for the POC. |
-| **Mobile** | Out of scope for the POC, planned as a future evolution. |
-| **Performance** | Average analysis time target < 60 seconds per document ≤ 10 pages (indicative, to be validated in POC). |
+| **Stack** | .NET 10 (web app + API), Python 3.13 (AI pipeline), Mistral SaaS (EU) |
+| **Deployment** | Local laptop, Linux or Windows. Docker Compose recommended. |
+| **Data residency** | EU/Italy only. No non-EU external services. |
+| **Tenancy** | Single-tenant (one SGR). |
+| **UI** | Desktop-first web app. No mobile in the POC. |
+| **Auth** | Local username/password. LDAPs interface defined, binding not implemented in POC. No MFA. |
+| **Security** | PBKDF2 password hashing, TLS for LDAPs, secrets managed via `.env`. |
+| **Cost** | Minimize token spend — `mistral-small` as default, `mistral-large` only where quality requires it. |
+| **Retention** | 90 days for documents, analyses, and audit logs. |
+| **Performance** | Analysis target: under 60 seconds for a 10-page document (indicative, to be validated). |
+| **Compliance** | Audit trail for traceability. Source citation + confidence flags for explainability. AI Act: limited-risk classification assumed. |
 
-### 3.5 Out of scope (POC)
+### 3.5 Out of scope
 
-Features **excluded** from the POC, that may be reconsidered in later phases:
-
-- Conversational Q&A on documents.
-- Automatic document type classification.
-- Semantic search over document archive.
-- Comparison of the **same fund across different periods** (excluded because *"no history available"*) and **peer comparison** of different funds → **deferred to post-POC**.
-- Comparison of different versions of the same document (draft vs final).
-- Analysis versioning.
-- Human-in-the-loop review/approval workflow.
-- Notifications / alerts.
-- Collaboration (comments, annotations, sharing).
-- Integrations with external systems (PMS, DMS, CRM, data providers, corporate SSO).
-- Mobile app.
-- Multi-tenant.
-- Corporate PDF template.
-- Per-group model fine-tuning.
-- OCR for scanned documents (assumption: input PDFs are native/text-based).
+- Conversational Q&A on documents
+- Automatic document type classification
+- Semantic search
+- Document comparison across periods or across funds (no historical data available)
+- Analysis versioning
+- Human-in-the-loop review workflow
+- Notifications
+- Collaboration (comments, annotations, sharing)
+- Integrations with PMS, DMS, CRM, data providers, or SSO
+- Mobile app
+- Multi-tenant
+- Corporate PDF template
+- Per-group model fine-tuning
+- OCR (input PDFs assumed to be native/text-based)
 
 ### 3.6 Closed open points
 
-All points resolved before the technical analysis.
-
-1. **LDAPs in the POC**: full implementation already in the POC, or only architectural readiness?
-   **▶ MR: Architectural readiness** → F1.3 implemented as an abstraction layer/interface; concrete LDAPs binding deferred to a later version.
-2. **Masking/pseudonymization**: full or simplified implementation?
-   **▶ MR: Full implementation** → even though test documents are fictitious, the masking component must be production-ready.
-3. **Fictitious test documents**: Claude will generate 3 documents of a fictitious balanced fund with exposure by country of risk / rating / asset class, with deliberately injected criticalities to test red flag detection.
-   **▶ MR: YES**
-4. **POC scope**: the POC covers **all three use cases** (factsheet PM extraction, red flag RM detection, regulatory summary) — not only the factsheet.
-   **▶ MR: all three**
+1. **LDAPs**: architectural readiness only — stub implementation with full configuration model; actual directory binding deferred.
+2. **Masking**: full Presidio-based implementation, not a simplified regex approach.
+3. **Test documents**: 3 fictitious fund documents will be generated with deliberately injected criticalities to validate the POC end to end.
+4. **POC scope**: all three use cases are in scope — extraction, red flags, and regulatory summary.
