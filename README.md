@@ -52,15 +52,19 @@ Conversational Q&A, automatic classification, semantic search, document comparis
 ```
 .
 ├── README.md                       # this file
+├── CLAUDE.md                       # Claude Code context (architecture, constraints, build order)
+├── AGENTS.md                       # AI agent context (same, more structured)
 └── docs/
     ├── functional-analysis.md      # functional requirements, actors, use cases, NFRs
-    └── technical-analysis.md       # architecture, stack, AI pipeline, security, deployment
+    ├── technical-analysis.md       # architecture, stack, AI pipeline, security, deployment
+    └── roadmap.md                  # 10 build phases with deliverables and acceptance criteria
 ```
 
 ## Documentation
 
 - [Functional analysis](docs/functional-analysis.md) — requirements, actors, use cases, user flows, NFRs, scope.
 - [Technical analysis](docs/technical-analysis.md) — architecture, tech stack, AI pipeline, security, deployment, Mistral setup.
+- [Roadmap](docs/roadmap.md) — build order, phase deliverables, acceptance criteria.
 
 ## Tech stack (planned)
 
