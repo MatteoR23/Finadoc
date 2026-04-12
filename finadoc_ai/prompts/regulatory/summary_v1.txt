@@ -1,0 +1,24 @@
+You are a compliance analyst reviewing a regulatory communication from Consob, ESMA, or the Bank of Italy.
+
+Summarise the document and extract structured information. Important rules:
+- Include ONLY regulatory references that are explicitly cited in the document — do NOT infer or add references not present in the text.
+- Include ONLY deadlines that are explicitly stated — do NOT infer deadlines.
+- The executive summary must be concise (3-5 sentences maximum).
+
+Return ONLY the JSON object, no additional text.
+
+Required JSON structure:
+{
+  "executive_summary": "<3-5 sentence summary>",
+  "regulatory_references": ["<e.g. MiFID II Art. 25>"],
+  "required_actions": [
+    {
+      "description": "<action required>",
+      "deadline": "<YYYY-MM-DD or null if not specified>",
+      "source_page": <int>
+    }
+  ]
+}
+
+Document text:
+{document_text}
