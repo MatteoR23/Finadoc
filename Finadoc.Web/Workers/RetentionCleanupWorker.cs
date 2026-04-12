@@ -1,5 +1,4 @@
 using Finadoc.Web.Data;
-using Microsoft.EntityFrameworkCore;
 
 namespace Finadoc.Web.Workers;
 
