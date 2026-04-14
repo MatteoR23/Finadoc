@@ -7,7 +7,7 @@ services:
       - ASPNETCORE_ENVIRONMENT=Production
       - ASPNETCORE_URLS=http://+:8080
       - MISTRAL_API_KEY=${MISTRAL_API_KEY}
-      - AI_SERVICE_URL=http://ai:8000
+      - AiService__BaseUrl=http://ai:8000
     volumes:
       - finadoc_data:/data
     depends_on:

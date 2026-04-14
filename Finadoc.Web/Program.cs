@@ -4,9 +4,17 @@ using Finadoc.Web.Services;
 using Finadoc.Web.Workers;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Components.Authorization;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Data Protection — persist keys to the shared volume so cookies and
+// antiforgery tokens survive container restarts.
+var keysPath = builder.Configuration["DataProtection:KeysPath"] ?? "/data/keys";
+builder.Services.AddDataProtection()
+    .PersistKeysToFileSystem(new DirectoryInfo(keysPath))
+    .SetApplicationName("Finadoc");
 
 // Blazor Server
 builder.Services.AddRazorPages();
