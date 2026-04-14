@@ -77,6 +77,62 @@ public class UserService(AppDbContext db, AuditService audit)
             .ToListAsync();
     }
 
+    /// <summary>Returns a single user with group memberships, or null.</summary>
+    public async Task<User?> GetUserAsync(Guid userId)
+    {
+        return await db.Users
+            .Include(u => u.UserGroups)
+                .ThenInclude(ug => ug.Group)
+            .FirstOrDefaultAsync(u => u.Id == userId);
+    }
+
+    /// <summary>Updates username, admin flag, and group memberships.</summary>
+    public async Task UpdateUserAsync(
+        Guid userId,
+        string username,
+        bool isAdmin,
+        IEnumerable<int> groupIds,
+        Guid? actingUserId = null)
+    {
+        var user = await db.Users.FindAsync(userId)
+            ?? throw new InvalidOperationException("User not found.");
+
+        user.Username = username;
+        user.IsAdmin = isAdmin;
+
+        // Replace group memberships
+        var existing = await db.UserGroups.Where(ug => ug.UserId == userId).ToListAsync();
+        db.UserGroups.RemoveRange(existing);
+        foreach (var gid in groupIds)
+            db.UserGroups.Add(new UserGroup { UserId = userId, GroupId = gid });
+
+        await db.SaveChangesAsync();
+
+        await audit.LogAsync(
+            action: "user_updated",
+            userId: actingUserId,
+            targetType: "User",
+            targetId: userId.ToString(),
+            outcome: "success");
+    }
+
+    /// <summary>Resets a user's password (admin action — no current-password check).</summary>
+    public async Task ResetPasswordAsync(Guid userId, string newPassword, Guid? actingUserId = null)
+    {
+        var user = await db.Users.FindAsync(userId);
+        if (user is null) return;
+
+        user.PasswordHash = PasswordHasher.HashPassword(newPassword);
+        await db.SaveChangesAsync();
+
+        await audit.LogAsync(
+            action: "password_reset",
+            userId: actingUserId,
+            targetType: "User",
+            targetId: userId.ToString(),
+            outcome: "success");
+    }
+
     /// <summary>Deactivates a user (soft delete — they cannot log in but their data is preserved).</summary>
     public async Task DeactivateUserAsync(Guid userId, Guid? actingUserId = null)
     {
@@ -94,7 +150,47 @@ public class UserService(AppDbContext db, AuditService audit)
             outcome: "success");
     }
 
-    /// <summary>Updates a user's password hash.</summary>
+    /// <summary>Reactivates a previously deactivated user.</summary>
+    public async Task ReactivateUserAsync(Guid userId, Guid? actingUserId = null)
+    {
+        var user = await db.Users.FindAsync(userId);
+        if (user is null) return;
+
+        user.IsActive = true;
+        await db.SaveChangesAsync();
+
+        await audit.LogAsync(
+            action: "user_reactivated",
+            userId: actingUserId,
+            targetType: "User",
+            targetId: userId.ToString(),
+            outcome: "success");
+    }
+
+    /// <summary>
+    /// Permanently deletes a user and all their data (documents, analyses cascade via FK).
+    /// Cannot delete yourself.
+    /// </summary>
+    public async Task DeleteUserAsync(Guid userId, Guid? actingUserId = null)
+    {
+        if (userId == actingUserId)
+            throw new InvalidOperationException("Cannot delete your own account.");
+
+        var user = await db.Users.FindAsync(userId);
+        if (user is null) return;
+
+        db.Users.Remove(user);
+        await db.SaveChangesAsync();
+
+        await audit.LogAsync(
+            action: "user_deleted",
+            userId: actingUserId,
+            targetType: "User",
+            targetId: userId.ToString(),
+            outcome: "success");
+    }
+
+    /// <summary>Updates a user's password hash (self-service — caller must verify current password first).</summary>
     public async Task UpdatePasswordAsync(Guid userId, string newPassword)
     {
         var user = await db.Users.FindAsync(userId);
