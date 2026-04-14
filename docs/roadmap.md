@@ -45,6 +45,59 @@ Tables created: `Users`, `Groups`, `UserGroups`, `Documents`, `Analyses`, `Audit
 
 ---
 
+## Phase 2bis — Unit tests
+
+**Deliverable:** Core business logic is covered by automated tests; CI can run them in a clean environment.
+
+### .NET — `Finadoc.Web.Tests` (xUnit)
+
+New project: `Finadoc.Web.Tests/Finadoc.Web.Tests.csproj`
+Dependencies: `xunit`, `xunit.runner.visualstudio`, `Moq`, `Microsoft.EntityFrameworkCore.InMemory`, `Microsoft.AspNetCore.Mvc.Testing`
+
+| Suite | What to test |
+|---|---|
+| `PasswordHasherTests` | `HashPassword` produces a `salt:hash` string; `VerifyPassword` returns `true` for correct password, `false` for wrong password, `false` for tampered hash; timing-safe comparison (no early exit on wrong length) |
+| `LocalAuthProviderTests` | Returns `false` for unknown user; returns `false` for inactive user; returns `false` for wrong password; returns `true` + logs `login/success` audit event for valid credentials; `GetUserInfoAsync` maps groups correctly |
+| `UserServiceTests` | `CreateAdminAsync` creates user with `IsAdmin = true` and no groups; `CreateUserAsync` creates `UserGroup` rows; `DeleteUserAsync` throws/no-ops when `userId == currentUserId` (self-delete guard); `UpdatePasswordAsync` updates hash and logs `password_changed` |
+
+Use the EF Core InMemory provider to avoid SQLite I/O. Mock `AuditService` with Moq.
+
+### Python — `finadoc_ai/tests/` (pytest)
+
+Dependencies: `pytest`, `httpx` (async test client for FastAPI)
+
+| Suite | What to test |
+|---|---|
+| `test_health.py` | `GET /health` returns `200` and `{"status": "ok"}` |
+| `test_masking.py` | A text containing a known Italian name + IBAN is masked before it reaches the Mistral call; the placeholder mapping is not empty after masking; re-running masking on the same text produces consistent placeholders |
+| `test_extraction_schema.py` | Valid extraction JSON passes the Pydantic model; missing required fields raise `ValidationError`; `confidence` values outside `{high, medium, low}` raise `ValidationError` |
+
+Use `pytest-asyncio` for the FastAPI tests. Mock the `MistralClient` to avoid live API calls — inject a fixture that returns a canned JSON response.
+
+### Project structure
+
+```
+Finadoc.Web.Tests/
+  Finadoc.Web.Tests.csproj
+  Auth/
+    PasswordHasherTests.cs
+    LocalAuthProviderTests.cs
+  Services/
+    UserServiceTests.cs
+
+finadoc_ai/
+  tests/
+    __init__.py
+    conftest.py          # FastAPI TestClient fixture, Mistral mock
+    test_health.py
+    test_masking.py
+    test_extraction_schema.py
+```
+
+**Acceptance:** `dotnet test` passes all .NET suites; `pytest finadoc_ai/tests/` passes all Python suites; both run without network access (no live Mistral calls, no SQLite file).
+
+---
+
 ## Phase 3 — Document upload
 
 **Deliverable:** Users can upload files; the system stores them and records the event.
