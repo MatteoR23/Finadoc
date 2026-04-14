@@ -10,7 +10,7 @@ Ten phases, each with a clear deliverable and acceptance criteria. Each phase bu
 
 ---
 
-## Phase 1 — Infrastructure skeleton
+## Phase 1 — Infrastructure skeleton ✅
 
 **Deliverable:** Both services start, talk to each other, and share a volume.
 
@@ -25,20 +25,21 @@ Ten phases, each with a clear deliverable and acceptance criteria. Each phase bu
 
 ---
 
-## Phase 2 — Authentication
+## Phase 2 — Authentication ✅
 
 **Deliverable:** Users can log in; the admin account is created on first run.
 
-- ASP.NET Core Identity with PBKDF2-SHA512
+- Custom PBKDF2-SHA512 (`PasswordHasher`) — no ASP.NET Identity dependency
 - First-run setup page: if `Users` table is empty, prompt for admin password before anything else
-- Login page, logout, password change
+- Login/logout via Razor Pages (required for HttpOnly cookie issuance); password change via Blazor
 - `IAuthProvider` interface + `LocalAuthProvider` (active) + `LdapsAuthProvider` (stub — all methods throw `NotImplementedException`)
-- `Auth:Provider` switch in `appsettings.json`
+- `Auth:Provider` switch in `appsettings.json`; `CookieAuthStateProvider` bridges HTTP auth into Blazor Server
 - Admin UI: create/deactivate users, assign groups (PM, RM, or both)
-- Session: HttpOnly + Secure cookie, 8-hour sliding expiration
-- EF Core migrations, SQLite at `/data/finadoc.db`
+- Session: HttpOnly + SameSite=Strict cookie, 8-hour sliding expiration
+- EF Core migrations, SQLite at `/data/finadoc.db`; auto-applied on startup
+- Dark enterprise Bootstrap 5 UI applied to all auth pages
 
-Tables created: `Users`, `Groups`, `UserGroups`.
+Tables created: `Users`, `Groups`, `UserGroups`, `Documents`, `Analyses`, `AuditEvents` (full schema migrated in one shot).
 
 **Acceptance:** Admin setup on first run; login/logout works; admin can create a PM user and an RM user; sessions expire correctly.
 

@@ -1,5 +1,30 @@
 @inherits LayoutComponentBase
+@using Microsoft.AspNetCore.Components.Authorization
 
-<main>
-    @Body
-</main>
+<div class="app-layout">
+    <AuthorizeView>
+        <Authorized>
+            <nav class="nav-bar">
+                <a href="/" class="nav-brand">Finadoc</a>
+                <div class="nav-links">
+                    <AuthorizeView Policy="AdminOnly" Context="_">
+                        <a href="/admin/users" class="nav-link">Admin</a>
+                    </AuthorizeView>
+                    <a href="/change-password" class="nav-link">Change password</a>
+                    <span class="nav-user">@context.User.Identity?.Name</span>
+                    <a href="/logout" class="nav-link nav-link-logout">Sign out</a>
+                </div>
+            </nav>
+        </Authorized>
+    </AuthorizeView>
+
+    <main class="main-content">
+        @Body
+    </main>
+</div>
+
+<div id="blazor-error-ui">
+    An unhandled error has occurred.
+    <a href="" class="reload">Reload</a>
+    <a class="dismiss">&#10006;</a>
+</div>

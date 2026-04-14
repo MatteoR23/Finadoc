@@ -315,6 +315,21 @@ Session: HttpOnly, Secure cookie, 8-hour sliding expiration.
 
 ---
 
+## UI design
+
+| | |
+|---|---|
+| **Theme** | Dark |
+| **Style** | Enterprise / financial dashboard (Bloomberg-style) |
+| **CSS framework** | Bootstrap 5 (loaded via CDN in `_Layout.cshtml`) |
+| **Scope** | Full design system — applies to all phases P2–P10 |
+
+The visual language should feel professional and data-dense: dark backgrounds, muted borders, high-contrast text, tabular data as the primary UI pattern. No decorative elements, no consumer-grade softness.
+
+Bootstrap classes are the baseline; custom overrides live in `wwwroot/css/site.css`. No additional JS libraries — Blazor Server + Bootstrap CSS only.
+
+---
+
 ## Security
 
 | | |

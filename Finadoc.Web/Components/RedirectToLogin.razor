@@ -1,0 +1,13 @@
+@inject NavigationManager Nav
+
+@code {
+    protected override void OnInitialized()
+    {
+        // forceLoad: true is required — it triggers a full HTTP round-trip so the
+        // cookie auth middleware re-evaluates the request. Without it, Blazor navigation
+        // stays in the circuit and the redirect has no effect on the auth state.
+        Nav.NavigateTo(
+            $"/login?returnUrl={Uri.EscapeDataString(Nav.Uri)}",
+            forceLoad: true);
+    }
+}

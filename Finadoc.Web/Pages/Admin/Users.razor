@@ -1,0 +1,105 @@
+@page "/admin/users"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "AdminOnly")]
+@using Finadoc.Web.Models
+@using Finadoc.Web.Services
+@using Microsoft.AspNetCore.Components.Authorization
+@using System.Security.Claims
+@inject UserService UserService
+@inject AuthenticationStateProvider AuthState
+
+<PageTitle>User Management — Finadoc</PageTitle>
+
+<div class="page-header">
+    <h1>User Management</h1>
+    <a href="/admin/create-user" class="btn btn-primary">+ Create user</a>
+</div>
+
+@if (_message is not null)
+{
+    <div class="alert alert-success">@_message</div>
+}
+
+@if (_users is null)
+{
+    <p class="text-muted">Loading…</p>
+}
+else if (!_users.Any())
+{
+    <p class="text-muted">No users found.</p>
+}
+else
+{
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Username</th>
+                <th>Role</th>
+                <th>Groups</th>
+                <th>Status</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var user in _users)
+            {
+                <tr class="@(user.IsActive ? "" : "row-inactive")">
+                    <td>@user.Username</td>
+                    <td>
+                        @if (user.IsAdmin)
+                        {
+                            <span class="badge badge-admin">Admin</span>
+                        }
+                    </td>
+                    <td>
+                        @foreach (var ug in user.UserGroups)
+                        {
+                            <span class="badge badge-@ug.Group.Name.ToLower()">@ug.Group.Name</span>
+                        }
+                    </td>
+                    <td>
+                        @if (user.IsActive)
+                        {
+                            <span style="color: var(--fd-success); font-size: 0.8rem;">● Active</span>
+                        }
+                        else
+                        {
+                            <span style="color: var(--fd-text-muted); font-size: 0.8rem;">○ Inactive</span>
+                        }
+                    </td>
+                    <td>
+                        @if (user.IsActive && user.Id != _currentUserId)
+                        {
+                            <button class="btn btn-danger btn-sm"
+                                    @onclick="() => DeactivateUser(user.Id)">
+                                Deactivate
+                            </button>
+                        }
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    private List<User>? _users;
+    private string? _message;
+    private Guid _currentUserId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var state = await AuthState.GetAuthenticationStateAsync();
+        var uid = state.User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (uid is not null) Guid.TryParse(uid, out _currentUserId);
+        await LoadUsers();
+    }
+
+    private async Task LoadUsers() => _users = await UserService.GetAllUsersAsync();
+
+    private async Task DeactivateUser(Guid userId)
+    {
+        await UserService.DeactivateUserAsync(userId, _currentUserId);
+        _message = "User deactivated.";
+        await LoadUsers();
+    }
+}
