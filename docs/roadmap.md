@@ -98,21 +98,19 @@ finadoc_ai/
 
 ---
 
-## Phase 3 — Document upload
+## Phase 3 — Document upload ✅
 
 **Deliverable:** Users can upload files; the system stores them and records the event.
 
-- Drag-and-drop + file picker on the upload page
-- Accepted formats: `.pdf`, `.xlsx`
-- Hard limit: 10 pages for PDF (rejected with a clear error if exceeded); Excel files accepted as-is
-- File stored at `/data/uploads/<document-uuid>/<original-filename>`
-- DB record created in `Documents` with `ExpiresAt = now + 90 days`
-- Audit event logged: `action = "document_upload"`, outcome, user ID
-- Upload page shows a list of the user's recent documents
+- `DocumentService`: validates extension (`.pdf`/`.xlsx`), reads up to 20 MB, counts PDF pages via regex on raw bytes — rejects with a clear error if >10; stores file at `/data/uploads/<document-uuid>/<original-filename>`; creates a `Documents` record with `ExpiresAt = now + 90 days`; logs `document_upload` audit event (success or failure with reason)
+- `Upload.razor`: `[Authorize]`-gated page with a styled drop-zone (invisible `InputFile` overlay for both click-to-browse and native drag-and-drop); success/error alerts; table of the user's own recent documents with PDF/XLSX format badges
+- `Storage:DataDir` config key (default `/data`; overridden via `Storage__DataDir` env var in VS Code launch config for local development)
+- `DocumentService` registered in DI; "Upload" link added to the nav bar
+- `_Imports.razor` extended with `System.Security.Claims`, `Finadoc.Web.Models`, `Finadoc.Web.Services`
 
-Table created: `Documents`. Audit table created: `AuditEvents`.
+Note: `Documents` and `AuditEvents` tables were already present from P2's `InitialCreate` migration — no new migration needed.
 
-**Acceptance:** Upload a PDF and an Excel file; both appear in the DB; `/data/uploads/` contains the files; audit log has one entry per upload.
+**Acceptance:** Upload a PDF and an Excel file; both appear in `Documents`; `/data/uploads/` contains the files; audit log has one entry per upload; uploading a PDF with >10 pages is rejected before any file is written.
 
 ---
 
