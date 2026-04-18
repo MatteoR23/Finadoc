@@ -18,16 +18,18 @@ class UserContext(BaseModel):
 
 
 class AnalyzeRequest(BaseModel):
-    document_path: str
+    document_s3_key: str
+    documents_bucket: str
     document_format: str  # "pdf" | "xlsx"
     language: str = "auto"
-    output_path: str
+    outputs_bucket: str
+    output_s3_prefix: str
     user_context: UserContext
 
 
 class AnalyzeResponse(BaseModel):
     status: str
-    pdf_path: str
+    result_s3_key: str
     summary: dict[str, Any]
     warnings: list[str]
 

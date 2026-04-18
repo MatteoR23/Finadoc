@@ -2,6 +2,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using Finadoc.Web.Data;
 using Finadoc.Web.Models;
+using Finadoc.Web.Services.Storage;
 using Microsoft.AspNetCore.Components.Forms;
 using Microsoft.EntityFrameworkCore;
 
@@ -10,16 +11,14 @@ namespace Finadoc.Web.Services;
 public class DocumentService(
     AppDbContext db,
     AuditService audit,
+    IStorageService storage,
     IConfiguration config,
     ILogger<DocumentService> logger)
 {
     private const int MaxPdfPages = 10;
     private const long MaxFileSizeBytes = 20 * 1024 * 1024; // 20 MB
-    private readonly string _dataDir = config["Storage:DataDir"] ?? "/data";
+    private readonly string _documentsBucket = config["Storage:DocumentsBucket"] ?? "finadoc-documents";
 
-    /// <summary>
-    /// Validates and stores an uploaded file, creates the DB record, and logs the audit event.
-    /// </summary>
     public async Task<(Document? Doc, string? Error)> SaveAsync(IBrowserFile file, Guid userId)
     {
         var ext = Path.GetExtension(file.Name).ToLowerInvariant();
@@ -51,17 +50,19 @@ public class DocumentService(
         }
 
         var docId = Guid.NewGuid();
-        var uploadDir = Path.Combine(_dataDir, "uploads", docId.ToString());
-        Directory.CreateDirectory(uploadDir);
-        var filePath = Path.Combine(uploadDir, file.Name);
-        await File.WriteAllBytesAsync(filePath, bytes);
+        var storageKey = $"documents/{docId}/{file.Name}";
+        var contentType = ext == ".pdf" ? "application/pdf"
+            : "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+
+        await using var uploadStream = new MemoryStream(bytes);
+        await storage.UploadAsync(_documentsBucket, storageKey, uploadStream, contentType);
 
         var doc = new Document
         {
             Id = docId,
             UserId = userId,
             OriginalFileName = file.Name,
-            StoragePath = filePath,
+            StorageKey = storageKey,
             Format = ext.TrimStart('.'),
             UploadedAt = DateTime.UtcNow,
             ExpiresAt = DateTime.UtcNow.AddDays(90),
@@ -76,7 +77,6 @@ public class DocumentService(
         return (doc, null);
     }
 
-    /// <summary>Returns the user's documents ordered by most recent, capped at 50.</summary>
     public async Task<List<Document>> GetByUserAsync(Guid userId)
         => await db.Documents
             .Where(d => d.UserId == userId)
@@ -84,25 +84,19 @@ public class DocumentService(
             .Take(50)
             .ToListAsync();
 
-    /// <summary>
-    /// Deletes a document owned by the given user: removes the file from disk, the DB record, and logs the audit event.
-    /// Returns an error message if the document is not found or does not belong to the user.
-    /// </summary>
     public async Task<string?> DeleteAsync(Guid docId, Guid userId)
     {
         var doc = await db.Documents.FindAsync(docId);
         if (doc is null || doc.UserId != userId)
             return "Document not found.";
 
-        // Remove the upload directory (contains only the original file).
-        var uploadDir = Path.GetDirectoryName(doc.StoragePath);
-        if (uploadDir is not null && Directory.Exists(uploadDir))
+        try
         {
-            try { Directory.Delete(uploadDir, recursive: true); }
-            catch (Exception ex)
-            {
-                logger.LogWarning(ex, "Could not delete upload directory {Dir} for document {Id}", uploadDir, docId);
-            }
+            await storage.DeletePrefixAsync(_documentsBucket, $"documents/{docId}/");
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Could not delete S3 objects for document {Id}", docId);
         }
 
         db.Documents.Remove(doc);
@@ -115,8 +109,6 @@ public class DocumentService(
         return null;
     }
 
-    // Each page object in a PDF has /Type /Page (not /Pages which is the tree root).
-    // Decoding as Latin-1 keeps byte values intact for binary PDF content.
     private static int CountPdfPages(byte[] bytes)
     {
         var text = Encoding.Latin1.GetString(bytes);

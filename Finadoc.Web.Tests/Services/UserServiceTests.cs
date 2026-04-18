@@ -92,6 +92,135 @@ public class UserServiceTests
         Assert.Empty(db.UserGroups);
     }
 
+    [Fact]
+    public async Task CreateUserAsync_LogsGroupAssignedAuditEvent_WhenGroupIdsAreProvided()
+    {
+        var (service, db) = CreateService();
+
+        await service.CreateUserAsync("pm_user", "pass", isAdmin: false, groupIds: [1, 2], createdByUserId: Guid.NewGuid());
+
+        Assert.Equal(2, db.AuditEvents.Count());
+        Assert.Contains(db.AuditEvents, e => e.Action == "group_assigned");
+    }
+
+    [Fact]
+    public async Task GetAllUsersAsync_ReturnsUsersOrderedByUsernameWithGroups()
+    {
+        var (service, db) = CreateService();
+        var userA = new User { Username = "alice", PasswordHash = PasswordHasher.HashPassword("x") };
+        var userB = new User { Username = "bob", PasswordHash = PasswordHasher.HashPassword("x") };
+        db.Users.AddRange(userB, userA);
+        db.Groups.Add(new Group { Id = 1, Name = "PM" });
+        await db.SaveChangesAsync();
+        db.UserGroups.Add(new UserGroup { UserId = userA.Id, GroupId = 1 });
+        await db.SaveChangesAsync();
+
+        var users = await service.GetAllUsersAsync();
+
+        Assert.Equal(2, users.Count);
+        Assert.Equal("alice", users[0].Username);
+        Assert.Equal("bob", users[1].Username);
+        Assert.Single(users[0].UserGroups);
+    }
+
+    [Fact]
+    public async Task GetUserAsync_ReturnsUserWithGroups_WhenExists()
+    {
+        var (service, db) = CreateService();
+        var user = new User { Username = "carol", PasswordHash = PasswordHasher.HashPassword("x") };
+        db.Users.Add(user);
+        db.Groups.Add(new Group { Id = 1, Name = "RM" });
+        await db.SaveChangesAsync();
+        db.UserGroups.Add(new UserGroup { UserId = user.Id, GroupId = 1 });
+        await db.SaveChangesAsync();
+
+        var result = await service.GetUserAsync(user.Id);
+
+        Assert.NotNull(result);
+        Assert.Equal("carol", result!.Username);
+        Assert.Single(result.UserGroups);
+        Assert.Equal(1, result.UserGroups.Single().GroupId);
+    }
+
+    [Fact]
+    public async Task GetUserAsync_ReturnsNull_WhenNotFound()
+    {
+        var (service, _) = CreateService();
+
+        var result = await service.GetUserAsync(Guid.NewGuid());
+
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public async Task UpdateUserAsync_UpdatesUserAndLogsAuditEvent()
+    {
+        var (service, db) = CreateService();
+        var user = new User { Username = "user", PasswordHash = PasswordHasher.HashPassword("x") };
+        db.Users.Add(user);
+        db.UserGroups.Add(new UserGroup { UserId = user.Id, GroupId = 1 });
+        await db.SaveChangesAsync();
+
+        await service.UpdateUserAsync(user.Id, "updated", true, [2], actingUserId: Guid.NewGuid());
+
+        var updated = db.Users.Single();
+        Assert.Equal("updated", updated.Username);
+        Assert.True(updated.IsAdmin);
+        Assert.Single(db.UserGroups);
+        Assert.Equal(2, db.UserGroups.Single().GroupId);
+        Assert.Contains(db.AuditEvents, e => e.Action == "user_updated");
+    }
+
+    [Fact]
+    public async Task ResetPasswordAsync_UpdatesHashAndLogsAuditEvent()
+    {
+        var (service, db) = CreateService();
+        var user = new User { Username = "user", PasswordHash = PasswordHasher.HashPassword("old") };
+        db.Users.Add(user);
+        await db.SaveChangesAsync();
+
+        await service.ResetPasswordAsync(user.Id, "new", actingUserId: Guid.NewGuid());
+
+        var updated = db.Users.Single();
+        Assert.True(PasswordHasher.VerifyPassword("new", updated.PasswordHash));
+        Assert.Contains(db.AuditEvents, e => e.Action == "password_reset");
+    }
+
+    [Fact]
+    public async Task DeactivateUserAsync_DoesNothing_WhenUserNotFound()
+    {
+        var (service, db) = CreateService();
+
+        await service.DeactivateUserAsync(Guid.NewGuid());
+
+        Assert.Empty(await db.Users.ToListAsync());
+    }
+
+    [Fact]
+    public async Task ReactivateUserAsync_DoesNothing_WhenUserNotFound()
+    {
+        var (service, db) = CreateService();
+
+        await service.ReactivateUserAsync(Guid.NewGuid());
+
+        Assert.Empty(await db.Users.ToListAsync());
+    }
+
+    [Fact]
+    public async Task AssignGroupsAsync_RemovesAllMemberships_WhenNoGroupsProvided()
+    {
+        var (service, db) = CreateService();
+        var user = new User { Username = "user", PasswordHash = PasswordHasher.HashPassword("x") };
+        db.Users.Add(user);
+        db.UserGroups.Add(new UserGroup { UserId = user.Id, GroupId = 1 });
+        await db.SaveChangesAsync();
+
+        await service.AssignGroupsAsync(user.Id, []);
+
+        Assert.Empty(db.UserGroups);
+        Assert.Contains(db.AuditEvents, e => e.Action == "group_assigned");
+    }
+
     // ── DeleteUserAsync ──────────────────────────────────────────────────────
 
     [Fact]

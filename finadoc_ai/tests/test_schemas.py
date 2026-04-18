@@ -144,13 +144,18 @@ def test_regulatory_result_with_actions() -> None:
 
 # ── AnalyzeRequest ────────────────────────────────────────────────────────────
 
+_VALID_REQUEST = {
+    "document_s3_key": "documents/abc/doc.pdf",
+    "documents_bucket": "finadoc-documents",
+    "document_format": "pdf",
+    "outputs_bucket": "finadoc-outputs",
+    "output_s3_prefix": "analyses/abc/",
+    "user_context": {"user_id": "user-123", "groups": ["PM"]},
+}
+
+
 def test_analyze_request_valid() -> None:
-    req = AnalyzeRequest(
-        document_path="/data/uploads/abc/doc.pdf",
-        document_format="pdf",
-        output_path="/data/outputs/abc/report.pdf",
-        user_context={"user_id": "user-123", "groups": ["PM"]},
-    )
+    req = AnalyzeRequest(**_VALID_REQUEST)
     assert req.language == "auto"  # default
     assert req.user_context.groups == ["PM"]
 
@@ -159,42 +164,20 @@ def test_analyze_request_missing_required_field() -> None:
     with pytest.raises(ValidationError):
         AnalyzeRequest(
             document_format="pdf",
-            output_path="/data/outputs/x/report.pdf",
+            outputs_bucket="finadoc-outputs",
+            output_s3_prefix="analyses/x/",
             user_context={"user_id": "u1", "groups": []},
-            # missing document_path
+            # missing document_s3_key and documents_bucket
         )
 
 
-# ── Endpoints return 501 for unimplemented pipelines ─────────────────────────
-
-def test_analyze_pm_returns_501(client) -> None:
-    payload = {
-        "document_path": "/data/uploads/test.pdf",
-        "document_format": "pdf",
-        "output_path": "/data/outputs/test/report.pdf",
-        "user_context": {"user_id": "u1", "groups": ["PM"]},
-    }
-    response = client.post("/analyze/pm", json=payload)
-    assert response.status_code == 501
-
+# ── Endpoints: rm and regulatory still return 501; pm is implemented (P4) ────
 
 def test_analyze_rm_returns_501(client) -> None:
-    payload = {
-        "document_path": "/data/uploads/test.pdf",
-        "document_format": "pdf",
-        "output_path": "/data/outputs/test/report.pdf",
-        "user_context": {"user_id": "u1", "groups": ["RM"]},
-    }
-    response = client.post("/analyze/rm", json=payload)
+    response = client.post("/analyze/rm", json=_VALID_REQUEST)
     assert response.status_code == 501
 
 
 def test_analyze_regulatory_returns_501(client) -> None:
-    payload = {
-        "document_path": "/data/uploads/test.pdf",
-        "document_format": "pdf",
-        "output_path": "/data/outputs/test/report.pdf",
-        "user_context": {"user_id": "u1", "groups": []},
-    }
-    response = client.post("/analyze/regulatory", json=payload)
+    response = client.post("/analyze/regulatory", json=_VALID_REQUEST)
     assert response.status_code == 501

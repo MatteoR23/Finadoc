@@ -478,6 +478,12 @@ textarea:focus-visible,
 .badge-format-pdf  { background: rgba(47, 129, 247, 0.15); color: #79c0ff; }
 .badge-format-xlsx { background: rgba(63, 185, 80, 0.15);  color: var(--fd-success); }
 
+/* ── Analysis status badges ───────────────────────────────── */
+.badge-status-queued    { background: rgba(139, 148, 158, 0.15); color: #8b949e; }
+.badge-status-running   { background: rgba(210, 153, 34, 0.15);  color: #e3b341; }
+.badge-status-completed { background: rgba(63, 185, 80, 0.15);   color: var(--fd-success); }
+.badge-status-failed    { background: rgba(248, 81, 73, 0.15);   color: var(--fd-danger); }
+
 /* ── Utility ──────────────────────────────────────────────── */
 .text-muted   { color: var(--fd-text-muted); font-size: 0.875rem; }
 .mt-1         { margin-top: 1rem; }

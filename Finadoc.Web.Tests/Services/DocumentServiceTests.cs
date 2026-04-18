@@ -2,6 +2,7 @@ using System.Text;
 using Finadoc.Web.Data;
 using Finadoc.Web.Models;
 using Finadoc.Web.Services;
+using Finadoc.Web.Services.Storage;
 using Microsoft.AspNetCore.Components.Forms;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -13,6 +14,7 @@ public class DocumentServiceTests : IDisposable
 {
     private readonly string _dataDir;
     private readonly AppDbContext _db;
+    private readonly FakeStorageService _storage;
     private readonly DocumentService _service;
     private readonly Guid _userId = Guid.NewGuid();
 
@@ -30,7 +32,8 @@ public class DocumentServiceTests : IDisposable
             .AddInMemoryCollection(new Dictionary<string, string?> { ["Storage:DataDir"] = _dataDir })
             .Build();
 
-        _service = new DocumentService(_db, audit, config, NullLogger<DocumentService>.Instance);
+        _storage = new FakeStorageService();
+        _service = new DocumentService(_db, audit, _storage, config, NullLogger<DocumentService>.Instance);
     }
 
     public void Dispose()
@@ -177,11 +180,16 @@ public class DocumentServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task SaveAsync_WritesFileToDisk()
+    public async Task SaveAsync_UploadsFileToStorage()
     {
         var (doc, _) = await _service.SaveAsync(PdfFile("report.pdf", 3), _userId);
 
-        Assert.True(File.Exists(doc!.StoragePath));
+        Assert.Equal("finadoc-documents", _storage.Bucket);
+        Assert.NotNull(_storage.Key);
+        Assert.StartsWith($"documents/{doc!.Id}/", _storage.Key);
+        Assert.Equal("application/pdf", _storage.ContentType);
+        Assert.NotNull(_storage.ContentBytes);
+        Assert.True(_storage.ContentBytes.Length > 0);
     }
 
     // ── GetByUserAsync ────────────────────────────────────────────────────────
@@ -277,18 +285,6 @@ public class DocumentServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task DeleteAsync_DeletesUploadDirectoryFromDisk()
-    {
-        var (doc, _) = await _service.SaveAsync(PdfFile("report.pdf", 2), _userId);
-        var uploadDir = Path.GetDirectoryName(doc!.StoragePath)!;
-        Assert.True(Directory.Exists(uploadDir));
-
-        await _service.DeleteAsync(doc.Id, _userId);
-
-        Assert.False(Directory.Exists(uploadDir));
-    }
-
-    [Fact]
     public async Task DeleteAsync_ReturnsNull_OnSuccess()
     {
         var (doc, _) = await _service.SaveAsync(PdfFile("report.pdf", 2), _userId);
@@ -299,6 +295,57 @@ public class DocumentServiceTests : IDisposable
     }
 
     // ── Test double ──────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task DeleteAsync_DeletesDbRecord_EvenIfStorageDeleteFails()
+    {
+        var (doc, _) = await _service.SaveAsync(PdfFile("report.pdf", 2), _userId);
+        _storage.ThrowOnDeletePrefix = true;
+        _db.AuditEvents.RemoveRange(_db.AuditEvents);
+        await _db.SaveChangesAsync();
+
+        var error = await _service.DeleteAsync(doc!.Id, _userId);
+
+        Assert.Null(error);
+        Assert.Empty(_db.Documents);
+        var evt = _db.AuditEvents.Single();
+        Assert.Equal("document_deleted", evt.Action);
+        Assert.Equal("success", evt.Outcome);
+    }
+
+    // ── Test double ──────────────────────────────────────────────────────────
+
+    private sealed class FakeStorageService : IStorageService
+    {
+        public string? Bucket { get; private set; }
+        public string? Key { get; private set; }
+        public string? ContentType { get; private set; }
+        public byte[]? ContentBytes { get; private set; }
+        public bool ThrowOnDeletePrefix { get; set; }
+
+        public async Task UploadAsync(string bucket, string key, Stream content, string contentType, CancellationToken ct = default)
+        {
+            Bucket = bucket;
+            Key = key;
+            ContentType = contentType;
+            await using var ms = new MemoryStream();
+            await content.CopyToAsync(ms, ct);
+            ContentBytes = ms.ToArray();
+        }
+
+        public Task<Stream> DownloadAsync(string bucket, string key, CancellationToken ct = default)
+            => throw new NotImplementedException();
+
+        public Task DeleteAsync(string bucket, string key, CancellationToken ct = default)
+            => throw new NotImplementedException();
+
+        public Task DeletePrefixAsync(string bucket, string prefix, CancellationToken ct = default)
+        {
+            if (ThrowOnDeletePrefix)
+                throw new Exception("Simulated storage failure.");
+            return Task.CompletedTask;
+        }
+    }
 
     private sealed class FakeBrowserFile(string name, byte[] content, bool throwOnRead = false) : IBrowserFile
     {
