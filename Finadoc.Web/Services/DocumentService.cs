@@ -84,6 +84,37 @@ public class DocumentService(
             .Take(50)
             .ToListAsync();
 
+    /// <summary>
+    /// Deletes a document owned by the given user: removes the file from disk, the DB record, and logs the audit event.
+    /// Returns an error message if the document is not found or does not belong to the user.
+    /// </summary>
+    public async Task<string?> DeleteAsync(Guid docId, Guid userId)
+    {
+        var doc = await db.Documents.FindAsync(docId);
+        if (doc is null || doc.UserId != userId)
+            return "Document not found.";
+
+        // Remove the upload directory (contains only the original file).
+        var uploadDir = Path.GetDirectoryName(doc.StoragePath);
+        if (uploadDir is not null && Directory.Exists(uploadDir))
+        {
+            try { Directory.Delete(uploadDir, recursive: true); }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Could not delete upload directory {Dir} for document {Id}", uploadDir, docId);
+            }
+        }
+
+        db.Documents.Remove(doc);
+        await db.SaveChangesAsync();
+
+        await audit.LogAsync("document_deleted", userId, "Document", docId.ToString(), "success",
+            $$"""{"file":"{{EscapeJson(doc.OriginalFileName)}}"}""");
+
+        logger.LogInformation("Document {Id} deleted by user {UserId}", docId, userId);
+        return null;
+    }
+
     // Each page object in a PDF has /Type /Page (not /Pages which is the tree root).
     // Decoding as Latin-1 keeps byte values intact for binary PDF content.
     private static int CountPdfPages(byte[] bytes)
