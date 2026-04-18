@@ -61,6 +61,7 @@ else
 // Application services
 builder.Services.AddScoped<AuditService>();
 builder.Services.AddScoped<UserService>();
+builder.Services.AddScoped<DocumentService>();
 builder.Services.AddScoped<AnalysisService>();
 
 // Background workers

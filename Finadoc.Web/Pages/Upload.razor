@@ -1,0 +1,148 @@
+@page "/upload"
+@attribute [Authorize]
+
+@inject DocumentService DocumentSvc
+@inject AuthenticationStateProvider AuthState
+
+<PageTitle>Upload — Finadoc</PageTitle>
+
+<div class="page-header">
+    <h1>Upload Document</h1>
+</div>
+
+<div class="upload-zone">
+    <p class="upload-label">
+        Drag a <strong>.pdf</strong> or <strong>.xlsx</strong> file here, or click to select.
+    </p>
+    <p class="upload-hint">PDF: max 10 pages &middot; Excel: any size &middot; Max 20 MB</p>
+    <InputFile OnChange="HandleFileSelectedAsync"
+               accept=".pdf,.xlsx"
+               class="upload-input"
+               disabled="@_uploading" />
+</div>
+
+@if (_uploading)
+{
+    <div class="alert alert-warning mt-1">Uploading&hellip;</div>
+}
+@if (_error is not null)
+{
+    <div class="alert alert-error mt-1">@_error</div>
+}
+@if (_success is not null)
+{
+    <div class="alert alert-success mt-1">@_success</div>
+}
+
+<div class="page-header mt-3">
+    <h2 class="section-title">Your documents</h2>
+</div>
+
+@if (_docs is null)
+{
+    <p class="text-muted">Loading&hellip;</p>
+}
+else if (_docs.Count == 0)
+{
+    <p class="text-muted">No documents uploaded yet.</p>
+}
+else
+{
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>File name</th>
+                <th>Format</th>
+                <th>Uploaded</th>
+                <th>Expires</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var doc in _docs)
+            {
+                <tr>
+                    <td>@doc.OriginalFileName</td>
+                    <td><span class="badge badge-format-@doc.Format">@doc.Format.ToUpperInvariant()</span></td>
+                    <td>@doc.UploadedAt.ToString("yyyy-MM-dd HH:mm")</td>
+                    <td>@doc.ExpiresAt.ToString("yyyy-MM-dd")</td>
+                    <td>
+                        @if (_confirmDeleteId == doc.Id)
+                        {
+                            <button class="btn btn-danger btn-sm me-1" @onclick="() => ConfirmDeleteAsync(doc.Id)">Confirm</button>
+                            <button class="btn btn-secondary btn-sm" @onclick="CancelDelete">Cancel</button>
+                        }
+                        else
+                        {
+                            <button class="btn btn-outline-danger btn-sm" @onclick="() => RequestDelete(doc.Id)">Delete</button>
+                        }
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    private Guid _userId;
+    private List<Document>? _docs;
+    private bool _uploading;
+    private string? _error;
+    private string? _success;
+    private Guid? _confirmDeleteId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var state = await AuthState.GetAuthenticationStateAsync();
+        var idStr = state.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        _userId = Guid.TryParse(idStr, out var id) ? id : Guid.Empty;
+        await RefreshListAsync();
+    }
+
+    private async Task HandleFileSelectedAsync(InputFileChangeEventArgs e)
+    {
+        _error = null;
+        _success = null;
+        _uploading = true;
+        StateHasChanged();
+
+        var (doc, error) = await DocumentSvc.SaveAsync(e.File, _userId);
+
+        _uploading = false;
+        if (error is not null)
+            _error = error;
+        else
+            _success = $"'{doc!.OriginalFileName}' uploaded successfully.";
+
+        await RefreshListAsync();
+    }
+
+    private async Task RefreshListAsync()
+    {
+        _docs = await DocumentSvc.GetByUserAsync(_userId);
+        StateHasChanged();
+    }
+
+    private void RequestDelete(Guid docId)
+    {
+        _confirmDeleteId = docId;
+        _error = null;
+        _success = null;
+    }
+
+    private void CancelDelete()
+    {
+        _confirmDeleteId = null;
+    }
+
+    private async Task ConfirmDeleteAsync(Guid docId)
+    {
+        _confirmDeleteId = null;
+        var error = await DocumentSvc.DeleteAsync(docId, _userId);
+        if (error is not null)
+            _error = error;
+        else
+            _success = "Document deleted.";
+        await RefreshListAsync();
+    }
+}

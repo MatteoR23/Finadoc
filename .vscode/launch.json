@@ -12,7 +12,8 @@
             "envFile": "${workspaceFolder}/.env",
             "env": {
                 "ASPNETCORE_ENVIRONMENT": "Development",
-                "ASPNETCORE_URLS": "https://localhost:5001;http://localhost:5000"
+                "ASPNETCORE_URLS": "https://localhost:5001;http://localhost:5000",
+                "Storage__DataDir": "${workspaceFolder}/data"
             },
             "serverReadyAction": {
                 "action": "openExternally",
