@@ -1,8 +1,11 @@
 @page "/upload"
 @attribute [Authorize]
+@implements IAsyncDisposable
 
 @inject DocumentService DocumentSvc
+@inject AnalysisService AnalysisSvc
 @inject AuthenticationStateProvider AuthState
+@inject NavigationManager Nav
 
 <PageTitle>Upload — Finadoc</PageTitle>
 
@@ -55,18 +58,31 @@ else
                 <th>Format</th>
                 <th>Uploaded</th>
                 <th>Expires</th>
+                <th>Analysis</th>
                 <th></th>
             </tr>
         </thead>
         <tbody>
             @foreach (var doc in _docs)
             {
+                var analysis = _analyses.GetValueOrDefault(doc.Id);
+                var isRunning = analysis?.Status is "Queued" or "Running";
                 <tr>
                     <td>@doc.OriginalFileName</td>
                     <td><span class="badge badge-format-@doc.Format">@doc.Format.ToUpperInvariant()</span></td>
                     <td>@doc.UploadedAt.ToString("yyyy-MM-dd HH:mm")</td>
                     <td>@doc.ExpiresAt.ToString("yyyy-MM-dd")</td>
                     <td>
+                        @if (analysis is null)
+                        {
+                            <span class="text-muted">—</span>
+                        }
+                        else
+                        {
+                            <span class="badge badge-status-@analysis.Status.ToLower()">@analysis.Status</span>
+                        }
+                    </td>
+                    <td class="action-cell">
                         @if (_confirmDeleteId == doc.Id)
                         {
                             <button class="btn btn-danger btn-sm me-1" @onclick="() => ConfirmDeleteAsync(doc.Id)">Confirm</button>
@@ -74,6 +90,22 @@ else
                         }
                         else
                         {
+                            @if (!isRunning && string.IsNullOrEmpty(_groupContext))
+                            {
+                                <span class="text-muted small me-2">No group assigned</span>
+                            }
+                            else if (!isRunning)
+                            {
+                                <button class="btn btn-primary btn-sm me-1"
+                                        @onclick="() => StartAnalysisAsync(doc.Id)"
+                                        disabled="@(_analyzing == doc.Id)">
+                                    @(_analyzing == doc.Id ? "Starting…" : "Analyze")
+                                </button>
+                            }
+                            else
+                            {
+                                <button class="btn btn-secondary btn-sm me-1" disabled>Running…</button>
+                            }
                             <button class="btn btn-outline-danger btn-sm" @onclick="() => RequestDelete(doc.Id)">Delete</button>
                         }
                     </td>
@@ -85,18 +117,52 @@ else
 
 @code {
     private Guid _userId;
+    private string _groupContext = string.Empty;
     private List<Document>? _docs;
+    private Dictionary<Guid, Analysis?> _analyses = [];
     private bool _uploading;
+    private Guid? _analyzing;
     private string? _error;
     private string? _success;
     private Guid? _confirmDeleteId;
+    private HubConnection? _hub;
 
     protected override async Task OnInitializedAsync()
     {
         var state = await AuthState.GetAuthenticationStateAsync();
         var idStr = state.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
         _userId = Guid.TryParse(idStr, out var id) ? id : Guid.Empty;
+        _groupContext = state.User.FindFirst(ClaimTypes.Role)?.Value ?? string.Empty;
         await RefreshListAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        _hub = new HubConnectionBuilder()
+            .WithUrl(Nav.ToAbsoluteUri("/hubs/analysis"), options =>
+            {
+                // Forward the auth cookie so the hub [Authorize] check passes
+                options.UseDefaultCredentials = true;
+            })
+            .WithAutomaticReconnect()
+            .Build();
+
+        _hub.On<object>("AnalysisUpdate", async _ =>
+        {
+            await RefreshAnalysesAsync();
+            await InvokeAsync(StateHasChanged);
+        });
+
+        try
+        {
+            await _hub.StartAsync();
+        }
+        catch (Exception)
+        {
+            // Hub is non-critical: real-time updates degrade gracefully to manual refresh
+        }
     }
 
     private async Task HandleFileSelectedAsync(InputFileChangeEventArgs e)
@@ -117,10 +183,38 @@ else
         await RefreshListAsync();
     }
 
+    private async Task StartAnalysisAsync(Guid docId)
+    {
+        _error = null;
+        _analyzing = docId;
+        StateHasChanged();
+        try
+        {
+            await AnalysisSvc.StartAnalysisAsync(docId, _groupContext, _userId);
+            await RefreshAnalysesAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = $"Could not start analysis: {ex.Message}";
+        }
+        finally
+        {
+            _analyzing = null;
+        }
+        StateHasChanged();
+    }
+
     private async Task RefreshListAsync()
     {
         _docs = await DocumentSvc.GetByUserAsync(_userId);
+        await RefreshAnalysesAsync();
         StateHasChanged();
+    }
+
+    private async Task RefreshAnalysesAsync()
+    {
+        if (_docs is null or { Count: 0 }) return;
+        _analyses = await AnalysisSvc.GetLatestByDocumentIdsAsync(_docs.Select(d => d.Id));
     }
 
     private void RequestDelete(Guid docId)
@@ -144,5 +238,11 @@ else
         else
             _success = "Document deleted.";
         await RefreshListAsync();
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_hub is not null)
+            await _hub.DisposeAsync();
     }
 }

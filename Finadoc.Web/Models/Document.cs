@@ -7,8 +7,8 @@ public class Document
     public User User { get; set; } = null!;
 
     public string OriginalFileName { get; set; } = string.Empty;
-    /// <summary>Absolute path on the shared volume, e.g. /data/uploads/{Id}/{OriginalFileName}</summary>
-    public string StoragePath { get; set; } = string.Empty;
+    /// <summary>S3 object key, e.g. documents/{Id}/{OriginalFileName}</summary>
+    public string StorageKey { get; set; } = string.Empty;
     /// <summary>"pdf" or "xlsx"</summary>
     public string Format { get; set; } = string.Empty;
     /// <summary>"auto", "it", "en"</summary>

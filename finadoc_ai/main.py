@@ -1,9 +1,13 @@
 import logging
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
+from pathlib import Path
 
 import config
 from models.schemas import AnalyzeRequest, AnalyzeResponse
+from pipeline import s3
+from pipeline.extraction import run_pm_extraction
+from pipeline.ingestion import ingest_document
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -29,7 +33,39 @@ async def health() -> dict:
 @app.post("/analyze/pm", response_model=AnalyzeResponse)
 async def analyze_pm(request: AnalyzeRequest) -> AnalyzeResponse:
     """PM pipeline: structured extraction from a fund factsheet."""
-    raise HTTPException(status_code=501, detail="PM pipeline not implemented yet (P4)")
+    warnings: list[str] = []
+
+    # Download document from S3 to a local temp file
+    try:
+        local_path = s3.download_to_tempfile(request.documents_bucket, request.document_s3_key)
+    except Exception as exc:
+        logger.error("Failed to download %s/%s: %s", request.documents_bucket, request.document_s3_key, exc)
+        raise HTTPException(status_code=422, detail=f"Could not retrieve document from storage: {exc}")
+
+    try:
+        ingested = ingest_document(str(local_path), request.document_format)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    finally:
+        local_path.unlink(missing_ok=True)
+
+    result = run_pm_extraction(ingested)
+
+    # Serialise and upload result to S3
+    result_key = f"{request.output_s3_prefix}extraction.json"
+    result_bytes = result.model_dump_json(indent=2).encode()
+    try:
+        s3.upload_bytes(request.outputs_bucket, result_key, result_bytes, "application/json")
+    except Exception as exc:
+        logger.error("Failed to upload result to %s/%s: %s", request.outputs_bucket, result_key, exc)
+        warnings.append(f"Result upload failed: {exc}")
+
+    return AnalyzeResponse(
+        status="ok",
+        result_s3_key=result_key,
+        summary=result.model_dump(),
+        warnings=warnings,
+    )
 
 
 @app.post("/analyze/rm", response_model=AnalyzeResponse)
