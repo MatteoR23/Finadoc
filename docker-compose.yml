@@ -10,7 +10,9 @@ services:
       - AiService__BaseUrl=http://ai:8000
       - AiService__InternalApiKey=${INTERNAL_API_KEY}
       - ConnectionStrings__DefaultConnection=Host=postgres;Port=5432;Database=finadoc;Username=${POSTGRES_USER:-finadoc};Password=${POSTGRES_PASSWORD:-finadoc_secret}
+      - Storage__Provider=minio
       - Storage__Endpoint=http://minio:9000
+      - Storage__PublicEndpoint=http://localhost:9000
       - Storage__AccessKey=${MINIO_ROOT_USER:-finadoc}
       - Storage__SecretKey=${MINIO_ROOT_PASSWORD:-finadoc_secret}
       - Storage__DocumentsBucket=finadoc-documents

@@ -67,18 +67,17 @@ else
     builder.Services.AddScoped<IAuthProvider, LocalAuthProvider>();
 
 // Object storage (MinIO / S3)
-builder.Services.AddSingleton<IAmazonS3>(sp =>
+var storageSettings = builder.Configuration.GetSection("Storage").Get<StorageSettings>()
+    ?? new StorageSettings();
+builder.Services.AddSingleton(storageSettings);
+builder.Services.AddSingleton<IAmazonS3>(_ =>
 {
-    var config = sp.GetRequiredService<IConfiguration>();
-    var s3Config = new AmazonS3Config
-    {
-        ServiceURL = config["Storage:Endpoint"] ?? "http://localhost:9000",
-        ForcePathStyle = true,
-    };
-    return new AmazonS3Client(
-        config["Storage:AccessKey"] ?? "finadoc",
-        config["Storage:SecretKey"] ?? "finadoc_secret",
-        s3Config);
+    var s3Config = new AmazonS3Config { ForcePathStyle = storageSettings.Provider == "minio" };
+    if (!string.IsNullOrWhiteSpace(storageSettings.Endpoint))
+        s3Config.ServiceURL = storageSettings.Endpoint;
+    else
+        s3Config.RegionEndpoint = Amazon.RegionEndpoint.GetBySystemName(storageSettings.Region);
+    return new AmazonS3Client(storageSettings.AccessKey, storageSettings.SecretKey, s3Config);
 });
 builder.Services.AddScoped<IStorageService, S3StorageService>();
 

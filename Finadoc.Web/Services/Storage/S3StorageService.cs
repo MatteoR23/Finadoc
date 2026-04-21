@@ -3,7 +3,7 @@ using Amazon.S3.Model;
 
 namespace Finadoc.Web.Services.Storage;
 
-public class S3StorageService(IAmazonS3 s3, ILogger<S3StorageService> logger) : IStorageService
+public class S3StorageService(IAmazonS3 s3, StorageSettings settings, ILogger<S3StorageService> logger) : IStorageService
 {
     public async Task UploadAsync(string bucket, string key, Stream content, string contentType, CancellationToken ct = default)
     {
@@ -48,5 +48,26 @@ public class S3StorageService(IAmazonS3 s3, ILogger<S3StorageService> logger) : 
         };
         await s3.DeleteObjectsAsync(deleteRequest, ct);
         logger.LogDebug("Deleted {Count} objects with prefix s3://{Bucket}/{Prefix}", list.S3Objects.Count, bucket, prefix);
+    }
+
+    public Task<string> GeneratePresignedUrlAsync(string bucket, string key, TimeSpan expiry, CancellationToken ct = default)
+    {
+        var request = new GetPreSignedUrlRequest
+        {
+            BucketName = bucket,
+            Key = key,
+            Expires = DateTime.UtcNow.Add(expiry),
+            Verb = HttpVerb.GET,
+        };
+        var url = s3.GetPreSignedURL(request);
+
+        if (!string.IsNullOrWhiteSpace(settings.PublicEndpoint) &&
+            !string.IsNullOrWhiteSpace(settings.Endpoint) &&
+            settings.Endpoint != settings.PublicEndpoint)
+        {
+            url = url.Replace(settings.Endpoint, settings.PublicEndpoint);
+        }
+
+        return Task.FromResult(url);
     }
 }

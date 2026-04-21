@@ -345,6 +345,9 @@ public class DocumentServiceTests : IDisposable
                 throw new Exception("Simulated storage failure.");
             return Task.CompletedTask;
         }
+
+        public Task<string> GeneratePresignedUrlAsync(string bucket, string key, TimeSpan expiry, CancellationToken ct = default)
+            => throw new NotImplementedException();
     }
 
     private sealed class FakeBrowserFile(string name, byte[] content, bool throwOnRead = false) : IBrowserFile
