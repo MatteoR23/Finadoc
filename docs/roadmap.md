@@ -45,7 +45,7 @@ Tables created: `Users`, `Groups`, `UserGroups`, `Documents`, `Analyses`, `Audit
 
 ---
 
-## Phase 2bis — Unit tests
+## Phase 2bis — Unit tests ✅
 
 **Deliverable:** Core business logic is covered by automated tests; CI can run them in a clean environment.
 
@@ -114,7 +114,7 @@ Note: `Documents` and `AuditEvents` tables were already present from P2's `Initi
 
 ---
 
-## Phase 4 — PM pipeline (extraction)
+## Phase 4 — PM pipeline (extraction) ✅
 
 **Deliverable:** The AI service can process a factsheet and return structured extraction JSON.
 
@@ -124,8 +124,8 @@ Note: `Documents` and `AuditEvents` tables were already present from P2's `Initi
 - Mistral call: `mistral-small-latest`, `response_format={"type": "json_object"}`, prompt from `prompts/PM/extraction_v1.txt`
 - Response parsed and validated against the extraction Pydantic schema (asset allocation by country/rating/asset class, performance, transactions, ESG)
 - Each field carries `source_page` and `confidence` (`high` / `medium` / `low`)
-- POST `/analyze/pm` endpoint returns `{"status": "ok", "pdf_path": "...", "summary": {...}, "warnings": [...]}`
-- .NET `AnalysisService` calls the endpoint, stores the result path in `Analyses`, notifies the Blazor component via SignalR
+- POST `/analyze/pm` endpoint returns `{"status": "ok", "result_s3_key": "...", "summary": {...}, "warnings": [...]}`
+- .NET `AnalysisService` (via Hangfire job) calls the endpoint, stores the result S3 key in `Analyses.PdfPath`, notifies the Blazor component via SignalR
 
 Table created: `Analyses`.
 

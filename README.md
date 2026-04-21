@@ -4,7 +4,7 @@ AI-powered application for analyzing financial documents, designed for an Italia
 
 ## Status
 
-**Proof of Concept (POC)** — early stage. Currently in the requirements definition phase. No code yet.
+**Proof of Concept (POC)** — in active development. Phases P1–P4 complete (infra, auth, upload, PM pipeline). P5 (PDF output) is next.
 
 ## Goal
 
@@ -51,13 +51,21 @@ Conversational Q&A, automatic classification, semantic search, document comparis
 
 ```
 .
-├── README.md                       # this file
+├── README.md
 ├── CLAUDE.md                       # Claude Code context (architecture, constraints, build order)
 ├── AGENTS.md                       # AI agent context (same, more structured)
+├── Finadoc.Web/                    # .NET 10 Blazor Server app
+├── Finadoc.Web.Tests/              # xUnit test project
+├── finadoc_ai/                     # Python 3.14 FastAPI AI service
+│   ├── pipeline/                   # ingestion, masking, llm, extraction, pdf_output, s3, …
+│   ├── models/schemas.py
+│   ├── prompts/                    # PM/, RM/, regulatory/
+│   └── tests/
+├── docker-compose.yml              # app + ai + postgres + minio + minio-init
 └── docs/
-    ├── functional-analysis.md      # functional requirements, actors, use cases, NFRs
-    ├── technical-analysis.md       # architecture, stack, AI pipeline, security, deployment
-    └── roadmap.md                  # 10 build phases with deliverables and acceptance criteria
+    ├── functional-analysis.md
+    ├── technical-analysis.md
+    └── roadmap.md
 ```
 
 ## Documentation
@@ -66,13 +74,22 @@ Conversational Q&A, automatic classification, semantic search, document comparis
 - [Technical analysis](docs/technical-analysis.md) — architecture, tech stack, AI pipeline, security, deployment, Mistral setup.
 - [Roadmap](docs/roadmap.md) — build order, phase deliverables, acceptance criteria.
 
-## Tech stack (planned)
+## Tech stack
 
-- **.NET Core** — web app and REST API
-- **Python** — document pre-processing, LLM orchestration, extraction pipeline
-- **Mistral API** — LLM provider (EU-hosted SaaS)
-- **Docker Compose** — local orchestration (optional but recommended)
+| Layer | Technology |
+|---|---|
+| Web + API | .NET 10, ASP.NET Core, Blazor Server |
+| Database | PostgreSQL 16 (EF Core) |
+| Object storage | MinIO (S3-compatible) |
+| AI pipeline | Python 3.14, FastAPI |
+| LLM | Mistral SaaS API (EU) |
+| Orchestration | Docker Compose |
 
 ## Getting started
 
-> Setup instructions will be added together with the first code drop. The POC is intended to run on a local laptop (Linux/Windows).
+```bash
+cp .env.example .env
+# Fill in MISTRAL_API_KEY and INTERNAL_API_KEY in .env
+docker compose up --build
+# → http://localhost:8080 (first run prompts for admin password)
+```

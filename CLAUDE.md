@@ -2,7 +2,7 @@
 
 ## Project
 
-Finadoc is a POC web app for an Italian SGR. Users upload financial documents (PDF/Excel) and receive an automatically generated PDF report in English. No code exists yet — the project is in the design phase.
+Finadoc is a POC web app for an Italian SGR. Users upload financial documents (PDF/Excel) and receive an automatically generated PDF report in English. Phases P1–P4 are complete; P5 (PDF output) is next.
 
 ## Documentation — read these before writing any code
 
@@ -14,12 +14,13 @@ Finadoc is a POC web app for an Italian SGR. Users upload financial documents (P
 
 ## Architecture in one paragraph
 
-Two Docker services share a local volume. The **.NET 10 / Blazor Server app** serves the UI, owns auth (ASP.NET Core Identity), manages the document lifecycle, writes the audit trail, and calls the Python service over HTTP. The **Python 3.13 / FastAPI service** handles everything AI: PDF/Excel ingestion (PyMuPDF, pdfplumber, pandas), PII masking (Microsoft Presidio), Mistral API calls, extraction/flag logic, and PDF generation (ReportLab). SQLite is the database; the `.NET` app owns the schema via EF Core migrations.
+Four Docker services collaborate. The **.NET 10 / Blazor Server app** serves the UI, owns auth (custom PBKDF2-SHA512, no ASP.NET Identity), manages the document lifecycle, writes the audit trail, and calls the Python service over HTTP (authenticated via `X-Internal-Api-Key`). The **Python 3.14 / FastAPI service** handles everything AI: PDF/Excel ingestion (PyMuPDF, pdfplumber, pandas), PII masking (Microsoft Presidio), Mistral API calls, extraction/flag logic, and PDF generation (ReportLab). **PostgreSQL 16** is the database; the .NET app owns the schema via EF Core migrations. **MinIO** (S3-compatible) stores uploaded documents and generated outputs — both services read/write via the S3 API.
 
 ## Stack
 
-- .NET 10, ASP.NET Core, Blazor Server, EF Core, SQLite
-- Python 3.13, FastAPI, PyMuPDF, pdfplumber, pandas, Presidio, mistralai v2, ReportLab
+- .NET 10, ASP.NET Core, Blazor Server, EF Core, PostgreSQL 16
+- Python 3.14, FastAPI, PyMuPDF, pdfplumber, pandas, Presidio, mistralai v2, ReportLab
+- MinIO (S3-compatible object store) for document and output storage
 - Mistral SaaS (EU): `mistral-small-latest` for PM extraction and regulatory summary, `mistral-large-latest` for RM red flag detection
 - Docker Compose for local orchestration
 
@@ -33,13 +34,18 @@ Two Docker services share a local volume. The **.NET 10 / Blazor Server app** se
 - **LDAPs**: interface and config model are defined; actual directory binding is NOT implemented in the POC (stub throws `NotImplementedException`).
 - **Scanned PDFs**: rejected — pipeline requires a text layer.
 
-## Project layout (planned)
+## Project layout
 
 ```
 Finadoc.Web/          # .NET app
+Finadoc.Web.Tests/    # xUnit test project
 finadoc_ai/           # Python AI service
+  pipeline/           # ingestion, masking, llm, extraction, red_flags, summary, pdf_output, s3
+  models/schemas.py
+  prompts/PM/ RM/ regulatory/
+  tests/
 docker-compose.yml
-.env                  # MISTRAL_API_KEY (excluded from git)
+.env                  # MISTRAL_API_KEY, INTERNAL_API_KEY (excluded from git)
 docs/
 ```
 

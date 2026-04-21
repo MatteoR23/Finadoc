@@ -2,7 +2,7 @@
 
 ## Project
 
-Finadoc is a POC web app for an Italian asset management company (SGR). Users upload financial documents (PDF/Excel) and receive an automatically generated PDF report in English. The project is currently in the design phase — no application code exists yet.
+Finadoc is a POC web app for an Italian asset management company (SGR). Users upload financial documents (PDF/Excel) and receive an automatically generated PDF report in English. Phases P1–P4 are complete; P5 (PDF output) is next.
 
 ## Documentation — read these first
 
@@ -18,18 +18,17 @@ Finadoc is a POC web app for an Italian asset management company (SGR). Users up
 Browser
   │  HTTP
   ▼
-.NET 10 / Blazor Server app   ──HTTP──►  Python 3.13 / FastAPI service
+.NET 10 / Blazor Server app   ──HTTP──►  Python 3.14 / FastAPI service
   │  (UI, auth, audit, DB)                 (ingestion, masking, LLM, PDF)
   │                                                  │
-  └────────────── shared Docker volume ──────────────┘
-                    /data/uploads/
-                    /data/outputs/
-                    /data/finadoc.db
+  ├── PostgreSQL 16 (EF Core)          MinIO (S3-compatible object store)
+  │                                      finadoc-documents / finadoc-outputs
+  └── /data/keys (ASP.NET Data Protection)
 
                                    Python service ──HTTPS──► Mistral SaaS (EU)
 ```
 
-The .NET app is the only entry point — the Python service is internal and unreachable from outside the Docker network.
+The .NET app is the only entry point — the Python service is internal and unreachable from outside the Docker network. Service-to-service calls are authenticated via `X-Internal-Api-Key` header.
 
 ## Roles
 
@@ -49,7 +48,7 @@ A user can belong to both PM and RM simultaneously.
 4. Parse and validate response against Pydantic schema
 5. Run cross-source consistency check (deterministic Python, no LLM)
 6. Generate PDF report with ReportLab
-7. Return `{status, pdf_path, summary, warnings}` to the .NET app
+7. Upload result JSON to MinIO (`finadoc-outputs`) and return `{status, result_s3_key, summary, warnings}` to the .NET app
 
 ## API endpoints (Python service)
 
@@ -60,7 +59,8 @@ A user can belong to both PM and RM simultaneously.
 | POST | `/analyze/regulatory` | Both — regulatory summary |
 | GET | `/health` | — |
 
-Request body: `{document_path, document_format, language, output_path, user_context}`.
+Request body: `{document_s3_key, documents_bucket, document_format, language, output_s3_prefix, outputs_bucket, user_context}`.
+Response: `{status, result_s3_key, summary, warnings}`.
 
 ## Database tables (SQLite, owned by .NET)
 
@@ -74,7 +74,7 @@ Schema details in [docs/technical-analysis.md](docs/technical-analysis.md).
 - **EU data residency.** Do not introduce any non-EU external service or API call.
 - **Presidio for masking** — not regex. The masking must be reliable on real financial documents.
 - **mistralai SDK v2** — do not use v1; there are breaking changes between the two.
-- **Python 3.13** — do not use 3.14; Presidio does not support it yet.
+- **Python 3.14** — the project runs on 3.14 (spaCy 3.8.14+ supports it); do not downgrade.
 - **No chunking** — documents are capped at 10 pages and fit within the model's context window.
 - **LDAPs stub** — the interface and config are defined; do not implement the actual directory binding in the POC.
 - **Audit trail** — every user-visible action must produce an `AuditEvent` record.

@@ -9,34 +9,29 @@
 Two processes, one shared volume, one external API call:
 
 ```
-┌──────────────────────────────────────────────────────────────────┐
-│  Local laptop                                                    │
-│                                                                  │
-│  ┌─────────────────────────┐   HTTP    ┌──────────────────────┐ │
-│  │  .NET Core App          │ ────────► │  Python AI Service   │ │
-│  │  (ASP.NET Core / Blazor)│ ◄──────── │  (FastAPI)           │ │
-│  │                         │           │                      │ │
-│  │  - Web UI               │           │  - Pre-processing    │ │
-│  │  - REST API             │           │  - Masking (Presidio)│ │
-│  │  - Auth (local + LDAPs) │           │  - LLM calls (Mistral│ │
-│  │  - Audit trail          │           │  - Extraction/Flags  │ │
-│  │  - File management      │           │  - PDF generation    │ │
-│  │  - EF Core + SQLite     │           │                      │ │
-│  └─────────────┬───────────┘           └──────────┬───────────┘ │
-│                │                                  │             │
-│        ┌───────▼──────────────────────────────────▼───────┐    │
-│        │            Shared volume (local filesystem)       │    │
-│        │   /data/uploads/   /data/outputs/   /data/db/     │    │
-│        └───────────────────────────────────────────────────┘    │
-│                                                                  │
-│                                          ▲  HTTPS               │
-│                                          │                       │
-└──────────────────────────────────────────┼───────────────────────┘
-                                           │
-                                  ┌────────▼────────┐
-                                  │  Mistral SaaS   │
-                                  │  API (EU)        │
-                                  └─────────────────┘
+┌──────────────────────────────────────────────────────────────────────────┐
+│  Local laptop                                                            │
+│                                                                          │
+│  ┌─────────────────────────┐   HTTP (X-Internal-Api-Key)                 │
+│  │  .NET Core App          │ ──────────────────────────► ┌─────────────┐ │
+│  │  (ASP.NET Core / Blazor)│ ◄────────────────────────── │ Python AI   │ │
+│  │                         │                             │ (FastAPI)   │ │
+│  │  - Web UI               │                             │             │ │
+│  │  - Auth (local + LDAPs) │    ┌─────────────────────┐  │ - Ingestion │ │
+│  │  - Audit trail          │    │  MinIO (S3)         │  │ - Presidio  │ │
+│  │  - EF Core + PostgreSQL │◄──►│  finadoc-documents  │◄►│ - Mistral   │ │
+│  │                         │    │  finadoc-outputs    │  │ - ReportLab │ │
+│  └─────────────────────────┘    └─────────────────────┘  └─────────────┘ │
+│                                                                          │
+│  ┌──────────────────────┐                  ▲  HTTPS                     │
+│  │  PostgreSQL 16       │                  │                             │
+│  └──────────────────────┘                  │                             │
+└─────────────────────────────────────────── ┼ ────────────────────────────┘
+                                             │
+                                    ┌────────▼────────┐
+                                    │  Mistral SaaS   │
+                                    │  API (EU)        │
+                                    └─────────────────┘
 ```
 
 The .NET app is the entry point for everything: it serves the UI, owns auth and session, writes the audit trail, and manages the document lifecycle. The Python service handles the AI work — it never talks to the browser directly and is not reachable from outside the Docker network.
@@ -49,8 +44,9 @@ The .NET app is the entry point for everything: it serves the UI, owns auth and 
 |---|---|---|
 | Web + API | ASP.NET Core / Blazor Server | .NET 10 |
 | ORM | Entity Framework Core | 10.x |
-| Database | SQLite | 3.x |
-| AI service | Python + FastAPI | 3.13 / 0.135+ |
+| Database | PostgreSQL | 16 |
+| Object store | MinIO (S3-compatible) | latest |
+| AI service | Python + FastAPI | 3.14 / 0.135+ |
 | PDF parsing | PyMuPDF + pdfplumber | 1.27+ / 0.11+ |
 | Excel parsing | pandas + openpyxl | latest |
 | PII masking | Microsoft Presidio | 2.2+ |
@@ -63,7 +59,7 @@ The .NET app is the entry point for everything: it serves the UI, owns auth and 
 
 **.NET 10** is the current LTS (November 2025, supported to 2028).
 
-**Python 3.13**: Presidio requires Python 3.10–3.13. Don't use 3.14 until Presidio adds support.
+**Python 3.14**: spaCy 3.8.14+ supports Python 3.14; the project runs on 3.14.
 
 **mistralai SDK v2** has breaking changes vs v1 — start on v2 directly to avoid a migration later.
 
@@ -105,22 +101,24 @@ FastAPI app — internal only. Four endpoints:
 | POST | `/analyze/regulatory` | Regulatory summary |
 | GET | `/health` | Health check |
 
-Each analysis endpoint receives a document path on the shared volume, the format, and some user context. It returns the path to the generated PDF and a machine-readable summary for the .NET app to store.
+Each analysis endpoint receives S3 coordinates for the document and output prefix, the format, and user context. It returns the S3 key of the result JSON and a machine-readable summary for the .NET app to store.
 
 ```json
 // request
 {
-  "document_path": "/data/uploads/<uuid>/<filename>",
+  "document_s3_key": "uploads/<uuid>/<filename>",
+  "documents_bucket": "finadoc-documents",
   "document_format": "pdf",
   "language": "auto",
-  "output_path": "/data/outputs/<uuid>/",
+  "output_s3_prefix": "analyses/<uuid>/",
+  "outputs_bucket": "finadoc-outputs",
   "user_context": { "user_id": "...", "groups": ["PM"] }
 }
 
 // response
 {
   "status": "ok",
-  "pdf_path": "/data/outputs/<uuid>/report.pdf",
+  "result_s3_key": "analyses/<uuid>/result.json",
   "summary": { ... },
   "warnings": [ ... ]
 }
@@ -147,7 +145,7 @@ finadoc_ai/
 
 ### Database
 
-SQLite — no separate service, just a file on disk, EF Core migrations handle the schema. Works fine for a single-tenant POC on a laptop.
+PostgreSQL 16 — runs as a Docker service, EF Core migrations handle the schema. The .NET app auto-applies migrations on startup.
 
 | Table | Key columns |
 |---|---|
@@ -155,21 +153,25 @@ SQLite — no separate service, just a file on disk, EF Core migrations handle t
 | `Groups` | `Id`, `Name` |
 | `UserGroups` | `UserId`, `GroupId` |
 | `Documents` | `Id`, `UserId`, `OriginalFileName`, `StoragePath`, `Format`, `Language`, `UploadedAt`, `ExpiresAt` |
-| `Analyses` | `Id`, `DocumentId`, `GroupContext`, `Status`, `PdfPath`, `StartedAt`, `CompletedAt`, `ExpiresAt` |
+| `Analyses` | `Id`, `DocumentId`, `GroupContext`, `Status`, `PdfPath` (stores result S3 key), `StartedAt`, `CompletedAt`, `ExpiresAt` |
 | `AuditEvents` | `Id`, `Timestamp`, `UserId`, `Action`, `TargetType`, `TargetId`, `Outcome`, `Details` |
 
-`RetentionCleanupWorker` runs daily and deletes rows where `ExpiresAt <= now`, then removes the corresponding files.
+`RetentionCleanupWorker` runs daily and deletes rows where `ExpiresAt <= now`, then removes the corresponding objects from MinIO.
 
 ### File storage
 
+Documents and outputs are stored in MinIO (S3-compatible), not on a shared filesystem:
+
 ```
-/data/
-├── uploads/<document-uuid>/<original-filename>
-├── outputs/<analysis-uuid>/report.pdf
-└── finadoc.db
+finadoc-documents bucket:
+  uploads/<document-uuid>/<original-filename>
+
+finadoc-outputs bucket:
+  analyses/<analysis-uuid>/result.json   ← extraction result
+  analyses/<analysis-uuid>/report.pdf    ← generated PDF (P5+)
 ```
 
-Both services mount the same Docker volume. Without Docker on Windows, the root maps to `%APPDATA%\Finadoc\`.
+The .NET app (`/data/keys`) mounts a Docker volume only for ASP.NET Data Protection keys.
 
 ---
 
@@ -348,38 +350,12 @@ Bootstrap classes are the baseline; custom overrides live in `wwwroot/css/site.c
 
 ### Docker Compose (recommended)
 
-```yaml
-# docker-compose.yml
-services:
-  app:
-    build: ./Finadoc.Web
-    ports:
-      - "8080:8080"
-    environment:
-      - ASPNETCORE_ENVIRONMENT=Production
-      - MISTRAL_API_KEY=${MISTRAL_API_KEY}
-      - AI_SERVICE_URL=http://ai:8000
-    volumes:
-      - finadoc_data:/data
-    depends_on:
-      - ai
-
-  ai:
-    build: ./finadoc_ai
-    expose:
-      - "8000"
-    environment:
-      - MISTRAL_API_KEY=${MISTRAL_API_KEY}
-    volumes:
-      - finadoc_data:/data
-
-volumes:
-  finadoc_data:
-```
+See `docker-compose.yml` in the repo root for the full configuration. Four services: `app` (.NET), `ai` (Python), `postgres` (PostgreSQL 16), `minio` (object store) + `minio-init` (bucket setup).
 
 `.env` (not committed):
 ```
 MISTRAL_API_KEY=your_key_here
+INTERNAL_API_KEY=<openssl rand -hex 32>
 ```
 
 ```bash
