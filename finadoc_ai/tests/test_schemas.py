@@ -145,7 +145,7 @@ def test_regulatory_result_with_actions() -> None:
 # ── AnalyzeRequest ────────────────────────────────────────────────────────────
 
 _VALID_REQUEST = {
-    "document_s3_key": "documents/abc/doc.pdf",
+    "document_s3_key": "uploads/abc/doc.pdf",
     "documents_bucket": "finadoc-documents",
     "document_format": "pdf",
     "outputs_bucket": "finadoc-outputs",
@@ -174,10 +174,10 @@ def test_analyze_request_missing_required_field() -> None:
 # ── Endpoints: rm and regulatory still return 501; pm is implemented (P4) ────
 
 def test_analyze_rm_returns_501(client) -> None:
-    response = client.post("/analyze/rm", json=_VALID_REQUEST)
+    response = client.post("/analyze/rm", json=_VALID_REQUEST, headers={"X-Internal-Api-Key": "test-key"})
     assert response.status_code == 501
 
 
 def test_analyze_regulatory_returns_501(client) -> None:
-    response = client.post("/analyze/regulatory", json=_VALID_REQUEST)
+    response = client.post("/analyze/regulatory", json=_VALID_REQUEST, headers={"X-Internal-Api-Key": "test-key"})
     assert response.status_code == 501

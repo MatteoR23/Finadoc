@@ -107,11 +107,16 @@ builder.Services.AddScoped<AnalysisJob>();
 builder.Services.AddHostedService<RetentionCleanupWorker>();
 
 // HttpClient for AI service
+var internalApiKey = builder.Configuration["AiService:InternalApiKey"];
+if (string.IsNullOrWhiteSpace(internalApiKey))
+    throw new InvalidOperationException("AiService:InternalApiKey is not configured. Set AiService__InternalApiKey in environment.");
+
 builder.Services.AddHttpClient("AiService", client =>
 {
     var baseUrl = builder.Configuration["AiService:BaseUrl"] ?? "http://localhost:8000";
     client.BaseAddress = new Uri(baseUrl);
     client.Timeout = TimeSpan.FromMinutes(5);
+    client.DefaultRequestHeaders.Add("X-Internal-Api-Key", internalApiKey);
 });
 
 var app = builder.Build();
