@@ -1,6 +1,6 @@
 services:
   app:
-    build: ./Finadoc.Web
+    build: ./FinLens.Web
     ports:
       - "8080:8080"
     environment:
@@ -9,14 +9,14 @@ services:
       - MISTRAL_API_KEY=${MISTRAL_API_KEY}
       - AiService__BaseUrl=http://ai:8000
       - AiService__InternalApiKey=${INTERNAL_API_KEY}
-      - ConnectionStrings__DefaultConnection=Host=postgres;Port=5432;Database=finadoc;Username=${POSTGRES_USER:-finadoc};Password=${POSTGRES_PASSWORD:-finadoc_secret}
+      - ConnectionStrings__DefaultConnection=Host=postgres;Port=5432;Database=finlens;Username=${POSTGRES_USER:-finlens};Password=${POSTGRES_PASSWORD:-finlens_secret}
       - Storage__Provider=minio
       - Storage__Endpoint=http://minio:9000
       - Storage__PublicEndpoint=http://localhost:9000
-      - Storage__AccessKey=${MINIO_ROOT_USER:-finadoc}
-      - Storage__SecretKey=${MINIO_ROOT_PASSWORD:-finadoc_secret}
-      - Storage__DocumentsBucket=finadoc-documents
-      - Storage__OutputsBucket=finadoc-outputs
+      - Storage__AccessKey=${MINIO_ROOT_USER:-finlens}
+      - Storage__SecretKey=${MINIO_ROOT_PASSWORD:-finlens_secret}
+      - Storage__DocumentsBucket=finlens-documents
+      - Storage__OutputsBucket=finlens-outputs
       - DataProtection__KeysPath=/data/keys
     volumes:
       - app_data:/data
@@ -29,17 +29,17 @@ services:
         condition: service_completed_successfully
 
   ai:
-    build: ./finadoc_ai
+    build: ./finlens_ai
     expose:
       - "8000"
     environment:
       - MISTRAL_API_KEY=${MISTRAL_API_KEY}
       - INTERNAL_API_KEY=${INTERNAL_API_KEY}
       - S3_ENDPOINT_URL=http://minio:9000
-      - S3_ACCESS_KEY=${MINIO_ROOT_USER:-finadoc}
-      - S3_SECRET_KEY=${MINIO_ROOT_PASSWORD:-finadoc_secret}
+      - S3_ACCESS_KEY=${MINIO_ROOT_USER:-finlens}
+      - S3_SECRET_KEY=${MINIO_ROOT_PASSWORD:-finlens_secret}
     volumes:
-      - finadoc_data:/data
+      - finlens_data:/data
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 10s
@@ -53,13 +53,13 @@ services:
   postgres:
     image: postgres:16-alpine
     environment:
-      - POSTGRES_USER=${POSTGRES_USER:-finadoc}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-finadoc_secret}
-      - POSTGRES_DB=finadoc
+      - POSTGRES_USER=${POSTGRES_USER:-finlens}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-finlens_secret}
+      - POSTGRES_DB=finlens
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-finadoc} -d finadoc"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-finlens} -d finlens"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -70,8 +70,8 @@ services:
     ports:
       - "9001:9001"
     environment:
-      - MINIO_ROOT_USER=${MINIO_ROOT_USER:-finadoc}
-      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD:-finadoc_secret}
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER:-finlens}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD:-finlens_secret}
     volumes:
       - minio_data:/data
     healthcheck:
@@ -87,13 +87,13 @@ services:
       minio:
         condition: service_healthy
     environment:
-      - MINIO_ROOT_USER=${MINIO_ROOT_USER:-finadoc}
-      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD:-finadoc_secret}
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER:-finlens}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD:-finlens_secret}
     entrypoint: >
       /bin/sh -c "
         mc alias set local http://minio:9000 $$MINIO_ROOT_USER $$MINIO_ROOT_PASSWORD &&
-        mc mb --ignore-existing local/finadoc-documents &&
-        mc mb --ignore-existing local/finadoc-outputs &&
+        mc mb --ignore-existing local/finlens-documents &&
+        mc mb --ignore-existing local/finlens-outputs &&
         echo 'MinIO buckets ready.'
       "
 
@@ -101,4 +101,4 @@ volumes:
   postgres_data:
   minio_data:
   app_data:
-  finadoc_data:
+  finlens_data:

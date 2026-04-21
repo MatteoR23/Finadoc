@@ -1,0 +1,99 @@
+@page "/setup"
+@using FinLens.Web.Services
+@inject UserService UserService
+@inject NavigationManager Nav
+@inject AppDbContext Db
+
+<PageTitle>FinLens — First-time Setup</PageTitle>
+
+<div class="auth-page">
+    <div class="auth-card">
+        <div class="brand">FinLens</div>
+        <h1>First-time setup</h1>
+        <p class="subtitle">Create the administrator account to get started.</p>
+
+        @if (_error is not null)
+        {
+            <div class="alert alert-error">@_error</div>
+        }
+
+        <EditForm Model="_model" OnValidSubmit="HandleSubmit">
+            <DataAnnotationsValidator />
+
+            <div class="form-group">
+                <label for="username">Admin username</label>
+                <InputText id="username" @bind-Value="_model.Username" autocomplete="username" />
+                <ValidationMessage For="() => _model.Username" />
+            </div>
+            <div class="form-group">
+                <label for="password">Password</label>
+                <InputText id="password" type="password" @bind-Value="_model.Password" autocomplete="new-password" />
+                <ValidationMessage For="() => _model.Password" />
+            </div>
+            <div class="form-group">
+                <label for="confirm">Confirm password</label>
+                <InputText id="confirm" type="password" @bind-Value="_model.Confirm" autocomplete="new-password" />
+                <ValidationMessage For="() => _model.Confirm" />
+            </div>
+
+            <button type="submit" class="btn btn-primary btn-full mt-3" disabled="@_submitting">
+                @(_submitting ? "Creating account…" : "Create admin account")
+            </button>
+        </EditForm>
+    </div>
+</div>
+
+@code {
+    private readonly SetupModel _model = new();
+    private string? _error;
+    private bool _submitting;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (await Db.Users.AnyAsync())
+            Nav.NavigateTo("/login", forceLoad: true);
+    }
+
+    private async Task HandleSubmit()
+    {
+        _error = null;
+
+        if (_model.Password != _model.Confirm)
+        {
+            _error = "Passwords do not match.";
+            return;
+        }
+
+        if (_model.Password.Length < 8)
+        {
+            _error = "Password must be at least 8 characters.";
+            return;
+        }
+
+        _submitting = true;
+        try
+        {
+            await UserService.CreateAdminAsync(_model.Username, _model.Password);
+            Nav.NavigateTo("/login", forceLoad: true);
+        }
+        catch (Exception ex)
+        {
+            _error = $"Setup failed: {ex.Message}";
+            _submitting = false;
+        }
+    }
+
+    private sealed class SetupModel
+    {
+        [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "Username is required.")]
+        [System.ComponentModel.DataAnnotations.StringLength(64, MinimumLength = 3,
+            ErrorMessage = "Username must be 3–64 characters.")]
+        public string Username { get; set; } = string.Empty;
+
+        [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "Password is required.")]
+        public string Password { get; set; } = string.Empty;
+
+        [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "Please confirm the password.")]
+        public string Confirm { get; set; } = string.Empty;
+    }
+}

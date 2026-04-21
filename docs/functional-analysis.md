@@ -1,8 +1,8 @@
-# Finadoc — Functional Analysis
+# FinLens — Functional Analysis
 
 ## 1. Product Vision
 
-Finadoc is an AI tool for analyzing financial documents, built for an Italian SGR (*Società di Gestione del Risparmio*). The core problem it addresses is simple: reading fund documents carefully enough to catch every number, every inconsistency, every regulatory threshold breach — without making mistakes. That takes a lot of time and attention, and errors still happen.
+FinLens is an AI tool for analyzing financial documents, built for an Italian SGR (*Società di Gestione del Risparmio*). The core problem it addresses is simple: reading fund documents carefully enough to catch every number, every inconsistency, every regulatory threshold breach — without making mistakes. That takes a lot of time and attention, and errors still happen.
 
 The POC covers three use cases:
 1. Structured extraction from fund factsheets — asset allocation, performance, transactions, ESG.
@@ -37,7 +37,7 @@ Output is always a PDF report in English. Every extracted value references the p
 4. **Main pain point** to solve today?
    - **▶ MR:** reading the data without making mistakes.
 
-5. **Success metrics**: how will we measure if Finadoc works?
+5. **Success metrics**: how will we measure if FinLens works?
    - **▶ MR:** both reduced errors and time saved.
 
 ### 2.2 Document types

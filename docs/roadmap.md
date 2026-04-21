@@ -1,4 +1,4 @@
-# Finadoc — Roadmap
+# FinLens — Roadmap
 
 > POC scope. Single developer (.NET + Python). Target: running locally on a laptop.
 
@@ -15,7 +15,7 @@ Ten phases, each with a clear deliverable and acceptance criteria. Each phase bu
 **Deliverable:** Both services start, talk to each other, and share a volume.
 
 - `docker-compose.yml` with `app` (.NET) and `ai` (Python/FastAPI) services
-- Shared `finadoc_data` volume mounted at `/data` in both containers
+- Shared `finlens_data` volume mounted at `/data` in both containers
 - Python service: `GET /health` returns `{"status": "ok"}`
 - .NET app: calls `/health` on startup and logs the result
 - `.env` file with `MISTRAL_API_KEY` placeholder (excluded from git)
@@ -36,7 +36,7 @@ Ten phases, each with a clear deliverable and acceptance criteria. Each phase bu
 - `Auth:Provider` switch in `appsettings.json`; `CookieAuthStateProvider` bridges HTTP auth into Blazor Server
 - Admin UI: create/deactivate users, assign groups (PM, RM, or both)
 - Session: HttpOnly + SameSite=Strict cookie, 8-hour sliding expiration
-- EF Core migrations, SQLite at `/data/finadoc.db`; auto-applied on startup
+- EF Core migrations, SQLite at `/data/finlens.db`; auto-applied on startup
 - Dark enterprise Bootstrap 5 UI applied to all auth pages
 
 Tables created: `Users`, `Groups`, `UserGroups`, `Documents`, `Analyses`, `AuditEvents` (full schema migrated in one shot).
@@ -49,9 +49,9 @@ Tables created: `Users`, `Groups`, `UserGroups`, `Documents`, `Analyses`, `Audit
 
 **Deliverable:** Core business logic is covered by automated tests; CI can run them in a clean environment.
 
-### .NET — `Finadoc.Web.Tests` (xUnit)
+### .NET — `FinLens.Web.Tests` (xUnit)
 
-New project: `Finadoc.Web.Tests/Finadoc.Web.Tests.csproj`
+New project: `FinLens.Web.Tests/FinLens.Web.Tests.csproj`
 Dependencies: `xunit`, `xunit.runner.visualstudio`, `Moq`, `Microsoft.EntityFrameworkCore.InMemory`, `Microsoft.AspNetCore.Mvc.Testing`
 
 | Suite | What to test |
@@ -62,7 +62,7 @@ Dependencies: `xunit`, `xunit.runner.visualstudio`, `Moq`, `Microsoft.EntityFram
 
 Use the EF Core InMemory provider to avoid SQLite I/O. Mock `AuditService` with Moq.
 
-### Python — `finadoc_ai/tests/` (pytest)
+### Python — `finlens_ai/tests/` (pytest)
 
 Dependencies: `pytest`, `httpx` (async test client for FastAPI)
 
@@ -77,15 +77,15 @@ Use `pytest-asyncio` for the FastAPI tests. Mock the `MistralClient` to avoid li
 ### Project structure
 
 ```
-Finadoc.Web.Tests/
-  Finadoc.Web.Tests.csproj
+FinLens.Web.Tests/
+  FinLens.Web.Tests.csproj
   Auth/
     PasswordHasherTests.cs
     LocalAuthProviderTests.cs
   Services/
     UserServiceTests.cs
 
-finadoc_ai/
+finlens_ai/
   tests/
     __init__.py
     conftest.py          # FastAPI TestClient fixture, Mistral mock
@@ -94,7 +94,7 @@ finadoc_ai/
     test_extraction_schema.py
 ```
 
-**Acceptance:** `dotnet test` passes all .NET suites; `pytest finadoc_ai/tests/` passes all Python suites; both run without network access (no live Mistral calls, no SQLite file).
+**Acceptance:** `dotnet test` passes all .NET suites; `pytest finlens_ai/tests/` passes all Python suites; both run without network access (no live Mistral calls, no SQLite file).
 
 ---
 
@@ -106,7 +106,7 @@ finadoc_ai/
 - `Upload.razor`: `[Authorize]`-gated page with a styled drop-zone (invisible `InputFile` overlay for both click-to-browse and native drag-and-drop); success/error alerts; table of the user's own recent documents with PDF/XLSX format badges
 - `Storage:DataDir` config key (default `/data`; overridden via `Storage__DataDir` env var in VS Code launch config for local development)
 - `DocumentService` registered in DI; "Upload" link added to the nav bar
-- `_Imports.razor` extended with `System.Security.Claims`, `Finadoc.Web.Models`, `Finadoc.Web.Services`
+- `_Imports.razor` extended with `System.Security.Claims`, `FinLens.Web.Models`, `FinLens.Web.Services`
 
 Note: `Documents` and `AuditEvents` tables were already present from P2's `InitialCreate` migration — no new migration needed.
 

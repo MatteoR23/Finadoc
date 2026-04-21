@@ -1,0 +1,249 @@
+@page "/admin/edit-user/{UserId:guid}"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "AdminOnly")]
+@using FinLens.Web.Models
+@using FinLens.Web.Services
+@using Microsoft.AspNetCore.Components.Authorization
+@using System.Security.Claims
+@inject UserService UserService
+@inject AuthenticationStateProvider AuthState
+@inject NavigationManager Nav
+
+<PageTitle>Edit User — FinLens</PageTitle>
+
+@if (_user is null)
+{
+    <p class="text-muted">Loading…</p>
+}
+else
+{
+    <div class="page-header">
+        <h1>Edit User — @_user.Username</h1>
+        <a href="/admin/users" class="btn btn-secondary">← Back</a>
+    </div>
+
+    @if (_error is not null)
+    {
+        <div class="alert alert-error">@_error</div>
+    }
+    @if (_success is not null)
+    {
+        <div class="alert alert-success">@_success</div>
+    }
+
+    <!-- ── Profile ─────────────────────────────────────────── -->
+    <section class="form-card mb-4">
+        <h2 class="mb-3" style="font-size:0.85rem; text-transform:uppercase; letter-spacing:.05em;">Profile</h2>
+
+        <EditForm Model="_profileModel" OnValidSubmit="SaveProfile">
+            <DataAnnotationsValidator />
+
+            <div class="form-group">
+                <label>Username</label>
+                <InputText @bind-Value="_profileModel.Username" />
+                <ValidationMessage For="() => _profileModel.Username" />
+            </div>
+
+            <div class="form-group">
+                <label class="checkbox-label">
+                    <InputCheckbox @bind-Value="_profileModel.IsAdmin" />
+                    Administrator
+                </label>
+            </div>
+
+            <fieldset class="form-group">
+                <legend>Groups</legend>
+                <label class="checkbox-label">
+                    <input type="checkbox" @bind="_profileModel.IsPm" />
+                    Portfolio Manager (PM)
+                </label>
+                <label class="checkbox-label">
+                    <input type="checkbox" @bind="_profileModel.IsRm" />
+                    Risk Manager (RM)
+                </label>
+            </fieldset>
+
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary" disabled="@_savingProfile">
+                    @(_savingProfile ? "Saving…" : "Save changes")
+                </button>
+            </div>
+        </EditForm>
+    </section>
+
+    <!-- ── Reset password ──────────────────────────────────── -->
+    <section class="form-card mb-4">
+        <h2 class="mb-3" style="font-size:0.85rem; text-transform:uppercase; letter-spacing:.05em;">Reset Password</h2>
+
+        <EditForm Model="_pwModel" OnValidSubmit="ResetPassword">
+            <DataAnnotationsValidator />
+
+            <div class="form-group">
+                <label>New password</label>
+                <InputText type="password" @bind-Value="_pwModel.Password" autocomplete="new-password" />
+                <ValidationMessage For="() => _pwModel.Password" />
+            </div>
+            <div class="form-group">
+                <label>Confirm password</label>
+                <InputText type="password" @bind-Value="_pwModel.Confirm" autocomplete="new-password" />
+                <ValidationMessage For="() => _pwModel.Confirm" />
+            </div>
+
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary" disabled="@_savingPw">
+                    @(_savingPw ? "Resetting…" : "Reset password")
+                </button>
+            </div>
+        </EditForm>
+    </section>
+
+    <!-- ── Danger zone ─────────────────────────────────────── -->
+    @if (_user.Id != _currentUserId)
+    {
+        <section class="form-card" style="border-color: rgba(248,81,73,0.35);">
+            <h2 class="mb-3" style="font-size:0.85rem; text-transform:uppercase; letter-spacing:.05em; color: var(--fd-danger);">Danger Zone</h2>
+
+            <div class="d-flex gap-3 flex-wrap">
+                @if (_user.IsActive)
+                {
+                    <button class="btn btn-danger" @onclick="Deactivate" disabled="@_actioning">
+                        Deactivate account
+                    </button>
+                }
+                else
+                {
+                    <button class="btn btn-secondary" @onclick="Reactivate" disabled="@_actioning">
+                        Reactivate account
+                    </button>
+                }
+
+                @if (_confirmDelete)
+                {
+                    <div class="d-flex align-items-center gap-2">
+                        <span style="font-size:0.82rem; color:var(--fd-danger);">Permanently delete all data?</span>
+                        <button class="btn btn-danger btn-sm" @onclick="DeleteConfirmed" disabled="@_actioning">Yes, delete</button>
+                        <button class="btn btn-secondary btn-sm" @onclick="() => _confirmDelete = false">Cancel</button>
+                    </div>
+                }
+                else
+                {
+                    <button class="btn btn-danger" @onclick="() => _confirmDelete = true">
+                        Delete user
+                    </button>
+                }
+            </div>
+        </section>
+    }
+}
+
+@code {
+    [Parameter] public Guid UserId { get; set; }
+
+    private User? _user;
+    private Guid _currentUserId;
+    private string? _error;
+    private string? _success;
+    private bool _savingProfile;
+    private bool _savingPw;
+    private bool _actioning;
+    private bool _confirmDelete;
+
+    private readonly ProfileModel _profileModel = new();
+    private readonly PwModel _pwModel = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        var state = await AuthState.GetAuthenticationStateAsync();
+        var uid = state.User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (uid is not null) Guid.TryParse(uid, out _currentUserId);
+
+        _user = await UserService.GetUserAsync(UserId);
+        if (_user is null) { Nav.NavigateTo("/admin/users"); return; }
+
+        _profileModel.Username = _user.Username;
+        _profileModel.IsAdmin  = _user.IsAdmin;
+        _profileModel.IsPm     = _user.UserGroups.Any(ug => ug.GroupId == 1);
+        _profileModel.IsRm     = _user.UserGroups.Any(ug => ug.GroupId == 2);
+    }
+
+    private async Task SaveProfile()
+    {
+        _error = null; _success = null; _savingProfile = true;
+        try
+        {
+            var groupIds = new List<int>();
+            if (_profileModel.IsPm) groupIds.Add(1);
+            if (_profileModel.IsRm) groupIds.Add(2);
+
+            await UserService.UpdateUserAsync(UserId, _profileModel.Username, _profileModel.IsAdmin, groupIds, _currentUserId);
+            _user = await UserService.GetUserAsync(UserId);
+            _success = "Profile updated.";
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _savingProfile = false; }
+    }
+
+    private async Task ResetPassword()
+    {
+        _error = null; _success = null;
+        if (_pwModel.Password != _pwModel.Confirm) { _error = "Passwords do not match."; return; }
+        _savingPw = true;
+        try
+        {
+            await UserService.ResetPasswordAsync(UserId, _pwModel.Password, _currentUserId);
+            _pwModel.Password = _pwModel.Confirm = string.Empty;
+            _success = "Password reset.";
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _savingPw = false; }
+    }
+
+    private async Task Deactivate()
+    {
+        _actioning = true;
+        await UserService.DeactivateUserAsync(UserId, _currentUserId);
+        _user = await UserService.GetUserAsync(UserId);
+        _success = "Account deactivated.";
+        _actioning = false;
+    }
+
+    private async Task Reactivate()
+    {
+        _actioning = true;
+        await UserService.ReactivateUserAsync(UserId, _currentUserId);
+        _user = await UserService.GetUserAsync(UserId);
+        _success = "Account reactivated.";
+        _actioning = false;
+    }
+
+    private async Task DeleteConfirmed()
+    {
+        _actioning = true;
+        try
+        {
+            await UserService.DeleteUserAsync(UserId, _currentUserId);
+            Nav.NavigateTo("/admin/users");
+        }
+        catch (Exception ex) { _error = ex.Message; _actioning = false; _confirmDelete = false; }
+    }
+
+    private sealed class ProfileModel
+    {
+        [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "Username is required.")]
+        [System.ComponentModel.DataAnnotations.StringLength(64, MinimumLength = 3,
+            ErrorMessage = "Username must be 3–64 characters.")]
+        public string Username { get; set; } = string.Empty;
+        public bool IsAdmin { get; set; }
+        public bool IsPm { get; set; }
+        public bool IsRm { get; set; }
+    }
+
+    private sealed class PwModel
+    {
+        [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "Password is required.")]
+        [System.ComponentModel.DataAnnotations.MinLength(8, ErrorMessage = "Min 8 characters.")]
+        public string Password { get; set; } = string.Empty;
+
+        [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "Please confirm.")]
+        public string Confirm { get; set; } = string.Empty;
+    }
+}

@@ -1,8 +1,8 @@
-# Finadoc — Claude Code context
+# FinLens — Claude Code context
 
 ## Project
 
-Finadoc is a POC web app for an Italian SGR. Users upload financial documents (PDF/Excel) and receive an automatically generated PDF report in English. Phases P1–P4 are complete; P5 (PDF output) is next.
+FinLens is a POC web app for an Italian SGR. Users upload financial documents (PDF/Excel) and receive an automatically generated PDF report in English. Phases P1–P4 are complete; P5 (PDF output) is next.
 
 ## Documentation — read these before writing any code
 
@@ -37,9 +37,9 @@ Four Docker services collaborate. The **.NET 10 / Blazor Server app** serves the
 ## Project layout
 
 ```
-Finadoc.Web/          # .NET app
-Finadoc.Web.Tests/    # xUnit test project
-finadoc_ai/           # Python AI service
+FinLens.Web/          # .NET app
+FinLens.Web.Tests/    # xUnit test project
+finlens_ai/           # Python AI service
   pipeline/           # ingestion, masking, llm, extraction, red_flags, summary, pdf_output, s3
   models/schemas.py
   prompts/PM/ RM/ regulatory/

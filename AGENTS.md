@@ -1,8 +1,8 @@
-# Finadoc — Agent context
+# FinLens — Agent context
 
 ## Project
 
-Finadoc is a POC web app for an Italian asset management company (SGR). Users upload financial documents (PDF/Excel) and receive an automatically generated PDF report in English. Phases P1–P4 are complete; P5 (PDF output) is next.
+FinLens is a POC web app for an Italian asset management company (SGR). Users upload financial documents (PDF/Excel) and receive an automatically generated PDF report in English. Phases P1–P4 are complete; P5 (PDF output) is next.
 
 ## Documentation — read these first
 
@@ -22,7 +22,7 @@ Browser
   │  (UI, auth, audit, DB)                 (ingestion, masking, LLM, PDF)
   │                                                  │
   ├── PostgreSQL 16 (EF Core)          MinIO (S3-compatible object store)
-  │                                      finadoc-documents / finadoc-outputs
+  │                                      finlens-documents / finlens-outputs
   └── /data/keys (ASP.NET Data Protection)
 
                                    Python service ──HTTPS──► Mistral SaaS (EU)
@@ -48,7 +48,7 @@ A user can belong to both PM and RM simultaneously.
 4. Parse and validate response against Pydantic schema
 5. Run cross-source consistency check (deterministic Python, no LLM)
 6. Generate PDF report with ReportLab
-7. Upload result JSON to MinIO (`finadoc-outputs`) and return `{status, result_s3_key, summary, warnings}` to the .NET app
+7. Upload result JSON to MinIO (`finlens-outputs`) and return `{status, result_s3_key, summary, warnings}` to the .NET app
 
 ## API endpoints (Python service)
 

@@ -1,0 +1,286 @@
+@page "/upload"
+@attribute [Authorize]
+@implements IAsyncDisposable
+
+@inject DocumentService DocumentSvc
+@inject AnalysisService AnalysisSvc
+@inject AuthenticationStateProvider AuthState
+
+<PageTitle>Upload — FinLens</PageTitle>
+
+<div class="page-header">
+    <h1>Upload Document</h1>
+</div>
+
+<div class="upload-zone">
+    <p class="upload-label">
+        Drag a <strong>.pdf</strong> or <strong>.xlsx</strong> file here, or click to select.
+    </p>
+    <p class="upload-hint">PDF: max 10 pages &middot; Excel: any size &middot; Max 20 MB</p>
+    <InputFile OnChange="HandleFileSelectedAsync"
+               accept=".pdf,.xlsx"
+               class="upload-input"
+               disabled="@_uploading" />
+</div>
+
+@if (_userGroups.Count > 1)
+{
+    <div class="context-selector mt-2">
+        <span class="context-selector-label">Pipeline:</span>
+        @foreach (var group in _userGroups)
+        {
+            <label class="context-selector-option">
+                <input type="radio"
+                       name="groupContext"
+                       value="@group"
+                       checked="@(_groupContext == group)"
+                       @onchange="() => _groupContext = group" />
+                @group
+            </label>
+        }
+    </div>
+}
+
+@if (_uploading)
+{
+    <div class="alert alert-warning mt-1">Uploading&hellip;</div>
+}
+@if (_error is not null)
+{
+    <div class="alert alert-error mt-1">@_error</div>
+}
+@if (_success is not null)
+{
+    <div class="alert alert-success mt-1">@_success</div>
+}
+
+<div class="page-header mt-3">
+    <h2 class="section-title">Your documents</h2>
+</div>
+
+@if (_docs is null)
+{
+    <p class="text-muted">Loading&hellip;</p>
+}
+else if (_docs.Count == 0)
+{
+    <p class="text-muted">No documents uploaded yet.</p>
+}
+else
+{
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>File name</th>
+                <th>Format</th>
+                <th>Uploaded</th>
+                <th>Expires</th>
+                <th>Analysis</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var doc in _docs)
+            {
+                var analysis = _analyses.GetValueOrDefault(doc.Id);
+                var isRunning = analysis?.Status is "Queued" or "Running";
+                <tr>
+                    <td>@doc.OriginalFileName</td>
+                    <td><span class="badge badge-format-@doc.Format">@doc.Format.ToUpperInvariant()</span></td>
+                    <td>@doc.UploadedAt.ToString("yyyy-MM-dd HH:mm")</td>
+                    <td>@doc.ExpiresAt.ToString("yyyy-MM-dd")</td>
+                    <td>
+                        @if (analysis is null)
+                        {
+                            <span class="text-muted">—</span>
+                        }
+                        else
+                        {
+                            <span class="badge badge-status-@analysis.Status.ToLower()">@analysis.Status</span>
+                        }
+                    </td>
+                    <td class="action-cell">
+                        @if (_confirmDeleteId == doc.Id)
+                        {
+                            <button class="btn btn-danger btn-sm me-1" @onclick="() => ConfirmDeleteAsync(doc.Id)">Confirm</button>
+                            <button class="btn btn-secondary btn-sm" @onclick="CancelDelete">Cancel</button>
+                        }
+                        else
+                        {
+                            @if (!isRunning && string.IsNullOrEmpty(_groupContext))
+                            {
+                                <span class="text-muted small me-2">No group assigned</span>
+                            }
+                            else if (!isRunning)
+                            {
+                                <button class="btn btn-primary btn-sm me-1"
+                                        @onclick="() => StartAnalysisAsync(doc.Id)"
+                                        disabled="@(_analyzing == doc.Id)">
+                                    @(_analyzing == doc.Id ? "Starting…" : "Analyze")
+                                </button>
+                            }
+                            else
+                            {
+                                <button class="btn btn-secondary btn-sm me-1" disabled>Running…</button>
+                            }
+                            <button class="btn btn-outline-danger btn-sm" @onclick="() => RequestDelete(doc.Id)">Delete</button>
+                        }
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+<style>
+    .context-selector { display: flex; align-items: center; gap: 1rem; padding: 0.5rem 0; }
+    .context-selector-label { font-weight: 600; font-size: 0.9rem; }
+    .context-selector-option { display: flex; align-items: center; gap: 0.3rem; cursor: pointer; font-size: 0.9rem; }
+</style>
+
+@code {
+    private Guid _userId;
+    private List<string> _userGroups = [];
+    private string _groupContext = string.Empty;
+    private List<Document>? _docs;
+    private Dictionary<Guid, Analysis?> _analyses = [];
+    private bool _uploading;
+    private Guid? _analyzing;
+    private string? _error;
+    private string? _success;
+    private Guid? _confirmDeleteId;
+    private CancellationTokenSource? _pollCts;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var state = await AuthState.GetAuthenticationStateAsync();
+        var idStr = state.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        _userId = Guid.TryParse(idStr, out var id) ? id : Guid.Empty;
+        _userGroups = state.User
+            .FindAll(ClaimTypes.Role)
+            .Select(c => c.Value)
+            .Where(v => v is "PM" or "RM")
+            .Distinct()
+            .ToList();
+        _groupContext = _userGroups.Count == 1 ? _userGroups[0] : string.Empty;
+        await RefreshListAsync();
+    }
+
+    protected override Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender) StartPollingIfNeeded();
+        return Task.CompletedTask;
+    }
+
+    private void StartPollingIfNeeded()
+    {
+        if (_pollCts is not null) return;
+        if (!HasPendingAnalyses()) return;
+
+        _pollCts = new CancellationTokenSource();
+        _ = PollAsync(_pollCts.Token);
+    }
+
+    private async Task PollAsync(CancellationToken ct)
+    {
+        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(3));
+        while (!ct.IsCancellationRequested && await timer.WaitForNextTickAsync(ct).ConfigureAwait(false))
+        {
+            await RefreshAnalysesAsync();
+            await InvokeAsync(StateHasChanged);
+
+            if (!HasPendingAnalyses())
+            {
+                _pollCts?.Cancel();
+                _pollCts = null;
+                break;
+            }
+        }
+    }
+
+    private bool HasPendingAnalyses() =>
+        _analyses.Values.Any(a => a?.Status is "Queued" or "Running");
+
+    private async Task HandleFileSelectedAsync(InputFileChangeEventArgs e)
+    {
+        _error = null;
+        _success = null;
+        _uploading = true;
+        StateHasChanged();
+
+        var (doc, error) = await DocumentSvc.SaveAsync(e.File, _userId);
+
+        _uploading = false;
+        if (error is not null)
+            _error = error;
+        else
+            _success = $"'{doc!.OriginalFileName}' uploaded successfully.";
+
+        await RefreshListAsync();
+    }
+
+    private async Task StartAnalysisAsync(Guid docId)
+    {
+        _error = null;
+        _analyzing = docId;
+        StateHasChanged();
+        try
+        {
+            await AnalysisSvc.StartAnalysisAsync(docId, _groupContext, _userId);
+            await RefreshAnalysesAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = $"Could not start analysis: {ex.Message}";
+        }
+        finally
+        {
+            _analyzing = null;
+        }
+        StateHasChanged();
+        StartPollingIfNeeded();
+    }
+
+    private async Task RefreshListAsync()
+    {
+        _docs = await DocumentSvc.GetByUserAsync(_userId);
+        await RefreshAnalysesAsync();
+        StateHasChanged();
+    }
+
+    private async Task RefreshAnalysesAsync()
+    {
+        if (_docs is null or { Count: 0 }) return;
+        _analyses = await AnalysisSvc.GetLatestByDocumentIdsAsync(_docs.Select(d => d.Id));
+    }
+
+    private void RequestDelete(Guid docId)
+    {
+        _confirmDeleteId = docId;
+        _error = null;
+        _success = null;
+    }
+
+    private void CancelDelete()
+    {
+        _confirmDeleteId = null;
+    }
+
+    private async Task ConfirmDeleteAsync(Guid docId)
+    {
+        _confirmDeleteId = null;
+        var error = await DocumentSvc.DeleteAsync(docId, _userId);
+        if (error is not null)
+            _error = error;
+        else
+            _success = "Document deleted.";
+        await RefreshListAsync();
+    }
+
+    public ValueTask DisposeAsync()
+    {
+        _pollCts?.Cancel();
+        _pollCts?.Dispose();
+        return ValueTask.CompletedTask;
+    }
+}

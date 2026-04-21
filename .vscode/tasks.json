@@ -2,10 +2,10 @@
     "version": "2.0.0",
     "tasks": [
         {
-            "label": "dotnet: build Finadoc.Web",
+            "label": "dotnet: build FinLens.Web",
             "type": "process",
             "command": "dotnet",
-            "args": ["build", "${workspaceFolder}/Finadoc.Web/Finadoc.Web.csproj"],
+            "args": ["build", "${workspaceFolder}/FinLens.Web/FinLens.Web.csproj"],
             "group": "build",
             "presentation": {
                 "reveal": "silent",
@@ -17,7 +17,7 @@
             "label": "dotnet: build solution",
             "type": "process",
             "command": "dotnet",
-            "args": ["build", "${workspaceFolder}/Finadoc.sln"],
+            "args": ["build", "${workspaceFolder}/FinLens.sln"],
             "group": {
                 "kind": "build",
                 "isDefault": true
@@ -29,9 +29,9 @@
             "problemMatcher": "$msCompile"
         },
         {
-            "label": "pip: install finadoc_ai",
+            "label": "pip: install finlens_ai",
             "type": "shell",
-            "command": "pip install -r ${workspaceFolder}/finadoc_ai/requirements.txt",
+            "command": "pip install -r ${workspaceFolder}/finlens_ai/requirements.txt",
             "group": "build",
             "presentation": {
                 "reveal": "always",

@@ -2,13 +2,13 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Finadoc Web (.NET)",
+            "name": "FinLens Web (.NET)",
             "type": "coreclr",
             "request": "launch",
-            "preLaunchTask": "dotnet: build Finadoc.Web",
-            "program": "${workspaceFolder}/Finadoc.Web/bin/Debug/net10.0/Finadoc.Web.dll",
+            "preLaunchTask": "dotnet: build FinLens.Web",
+            "program": "${workspaceFolder}/FinLens.Web/bin/Debug/net10.0/FinLens.Web.dll",
             "args": [],
-            "cwd": "${workspaceFolder}/Finadoc.Web",
+            "cwd": "${workspaceFolder}/FinLens.Web",
             "envFile": "${workspaceFolder}/.env",
             "env": {
                 "ASPNETCORE_ENVIRONMENT": "Development",
@@ -23,7 +23,7 @@
             "console": "integratedTerminal"
         },
         {
-            "name": "Finadoc AI (FastAPI)",
+            "name": "FinLens AI (FastAPI)",
             "type": "debugpy",
             "request": "launch",
             "module": "uvicorn",
@@ -33,7 +33,7 @@
                 "--port", "8001",
                 "--reload"
             ],
-            "cwd": "${workspaceFolder}/finadoc_ai",
+            "cwd": "${workspaceFolder}/finlens_ai",
             "envFile": "${workspaceFolder}/.env",
             "env": {
                 "DATA_DIR": "${workspaceFolder}/data",

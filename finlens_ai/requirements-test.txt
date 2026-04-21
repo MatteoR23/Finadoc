@@ -1,0 +1,13 @@
+# Minimal dependencies for running the test suite locally.
+# Does NOT include the ML/NLP stack (spaCy, Presidio, PyMuPDF, ReportLab)
+# because those are not imported at test time — pipeline modules are stubs until P4.
+#
+# Usage:
+#   pip install -r requirements-test.txt
+#   pytest finlens_ai/tests/
+#
+# In Docker the full requirements.txt is used instead.
+fastapi==0.115.5
+pydantic>=2.11.2,<3.0.0
+pytest==8.3.4
+httpx==0.28.1

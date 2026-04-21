@@ -1,4 +1,4 @@
-# Finadoc — Technical Analysis
+# FinLens — Technical Analysis
 
 > Aligned with `docs/functional-analysis.md`. POC scope only.
 
@@ -19,8 +19,8 @@ Two processes, one shared volume, one external API call:
 │  │  - Web UI               │                             │             │ │
 │  │  - Auth (local + LDAPs) │    ┌─────────────────────┐  │ - Ingestion │ │
 │  │  - Audit trail          │    │  MinIO (S3)         │  │ - Presidio  │ │
-│  │  - EF Core + PostgreSQL │◄──►│  finadoc-documents  │◄►│ - Mistral   │ │
-│  │                         │    │  finadoc-outputs    │  │ - ReportLab │ │
+│  │  - EF Core + PostgreSQL │◄──►│  finlens-documents  │◄►│ - Mistral   │ │
+│  │                         │    │  finlens-outputs    │  │ - ReportLab │ │
 │  └─────────────────────────┘    └─────────────────────┘  └─────────────┘ │
 │                                                                          │
 │  ┌──────────────────────┐                  ▲  HTTPS                     │
@@ -74,7 +74,7 @@ Serves the Blazor UI and a lightweight REST API on the same process. When a user
 Suggested project layout:
 
 ```
-Finadoc.Web/
+FinLens.Web/
 ├── Pages/                   # Blazor pages (Login, Dashboard, Upload, Report, Admin)
 ├── Components/
 ├── Services/                # AnalysisService, AuditService, RetentionService, ...
@@ -107,11 +107,11 @@ Each analysis endpoint receives S3 coordinates for the document and output prefi
 // request
 {
   "document_s3_key": "uploads/<uuid>/<filename>",
-  "documents_bucket": "finadoc-documents",
+  "documents_bucket": "finlens-documents",
   "document_format": "pdf",
   "language": "auto",
   "output_s3_prefix": "analyses/<uuid>/",
-  "outputs_bucket": "finadoc-outputs",
+  "outputs_bucket": "finlens-outputs",
   "user_context": { "user_id": "...", "groups": ["PM"] }
 }
 
@@ -127,7 +127,7 @@ Each analysis endpoint receives S3 coordinates for the document and output prefi
 Project layout:
 
 ```
-finadoc_ai/
+finlens_ai/
 ├── main.py
 ├── pipeline/
 │   ├── ingestion.py       # PDF / Excel → structured text
@@ -163,10 +163,10 @@ PostgreSQL 16 — runs as a Docker service, EF Core migrations handle the schema
 Documents and outputs are stored in MinIO (S3-compatible), not on a shared filesystem:
 
 ```
-finadoc-documents bucket:
+finlens-documents bucket:
   uploads/<document-uuid>/<original-filename>
 
-finadoc-outputs bucket:
+finlens-outputs bucket:
   analyses/<analysis-uuid>/result.json   ← extraction result
   analyses/<analysis-uuid>/report.pdf    ← generated PDF (P5+)
 ```
@@ -367,14 +367,14 @@ docker compose up --build
 
 ```bash
 # Terminal 1 — AI service
-cd finadoc_ai
+cd finlens_ai
 pip install -r requirements.txt
 python -m spacy download it_core_news_lg
 python -m spacy download en_core_web_lg
 uvicorn main:app --port 8000
 
 # Terminal 2 — .NET app
-cd Finadoc.Web
+cd FinLens.Web
 dotnet run
 ```
 
@@ -385,7 +385,7 @@ dotnet run
 ### Account and API key
 
 1. Go to [https://console.mistral.ai](https://console.mistral.ai) → Sign up → verify email.
-2. Navigate to **API Keys** → **Create new key** → give it a name (e.g. `finadoc-poc`).
+2. Navigate to **API Keys** → **Create new key** → give it a name (e.g. `finlens-poc`).
 3. Copy the key immediately — it's only shown once.
 4. Add it to `.env`:
    ```

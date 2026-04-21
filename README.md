@@ -1,4 +1,4 @@
-# Finadoc
+# FinLens
 
 AI-powered application for analyzing financial documents, designed for an Italian asset management company (SGR — *Società di Gestione del Risparmio*).
 
@@ -54,9 +54,9 @@ Conversational Q&A, automatic classification, semantic search, document comparis
 ├── README.md
 ├── CLAUDE.md                       # Claude Code context (architecture, constraints, build order)
 ├── AGENTS.md                       # AI agent context (same, more structured)
-├── Finadoc.Web/                    # .NET 10 Blazor Server app
-├── Finadoc.Web.Tests/              # xUnit test project
-├── finadoc_ai/                     # Python 3.14 FastAPI AI service
+├── FinLens.Web/                    # .NET 10 Blazor Server app
+├── FinLens.Web.Tests/              # xUnit test project
+├── finlens_ai/                     # Python 3.14 FastAPI AI service
 │   ├── pipeline/                   # ingestion, masking, llm, extraction, pdf_output, s3, …
 │   ├── models/schemas.py
 │   ├── prompts/                    # PM/, RM/, regulatory/
@@ -111,14 +111,14 @@ docker compose up postgres minio minio-init ai
 **2. Set the `InternalApiKey` for the .NET app** (once per machine, never committed):
 
 ```bash
-cd Finadoc.Web
+cd FinLens.Web
 dotnet user-secrets set "AiService:InternalApiKey" "<value from .env>"
 ```
 
 **3. Run the app:**
 
 ```bash
-cd Finadoc.Web
+cd FinLens.Web
 dotnet run
 # → http://localhost:5000 (or the port shown in the terminal)
 ```
