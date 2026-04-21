@@ -133,29 +133,32 @@ Table created: `Analyses`.
 
 ---
 
-## Phase 5 — PDF output (PM report)
+## Phase 5 — Unified analysis pipeline (PM + RM)
 
-**Deliverable:** A downloadable PDF report is generated from PM extraction JSON.
+**Deliverable:** Both PM and RM pipelines are complete end-to-end; the upload UI lets the user choose the analysis context before submitting.
+
+### Context selector
+
+- At upload time, the UI shows a context selector (radio buttons or dropdown) with only the options the logged-in user is entitled to:
+  - **PM — Structured extraction** (visible if user belongs to PM group)
+  - **RM — Red flag detection** (visible if user belongs to RM group)
+  - If the user belongs to only one group, the selector is hidden and that context is applied automatically.
+- The selected context is stored on the `Analyses` record (`pipeline_context` column: `pm` / `rm` / `regulatory`).
+- The .NET service calls the correct endpoint based on the selected context (`/analyze/pm` or `/analyze/rm`).
+
+### PM — PDF output
 
 - ReportLab `platypus` engine, `pdf_output.py`
 - Report structure:
-  - Header: document name, analysis date, group context, user
+  - Header: document name, analysis date, group context (`PM`), user
   - Asset allocation tables (by country, by rating, by asset class) — one row per entry, source page + confidence badge
   - Performance section
   - Transactions table
   - ESG section
   - Disclaimer: *"This report was generated automatically by an AI system. All data should be verified against the source document."*
 - Low-confidence rows rendered with a visible warning badge
-- PDF stored at `/data/outputs/<analysis-uuid>/report.pdf`
-- Download button in the Blazor UI; audit event logged on download
 
-**Acceptance:** End-to-end flow works — upload factsheet → PDF appears in the UI → download it → open it and verify tables, badges, and disclaimer are correct.
-
----
-
-## Phase 6 — RM pipeline (red flag detection)
-
-**Deliverable:** The AI service can analyze a financial report and return a prioritized list of red flags.
+### RM — Red flag detection + PDF output
 
 - POST `/analyze/rm` endpoint
 - Mistral call: `mistral-large-latest`, prompt from `prompts/RM/red_flags_v1.txt`
@@ -165,29 +168,46 @@ Table created: `Analyses`.
   - UCITS/AIFMD concentration thresholds derivable from the document text
 - Response schema: list of `{id, severity, description, affected_fields, source_pages, detail}`
 - Severity levels: `critical` / `warning` / `info`
-- Red flags added to the PDF report: sorted critical → warning → info, source pages listed per flag
+- Report structure:
+  - Header: document name, analysis date, group context (`RM`), user
+  - Red flags sorted critical → warning → info, source pages listed per flag
+  - Disclaimer
+
+### Shared
+
+- PDF stored at `/data/outputs/<analysis-uuid>/report.pdf`
+- Download button in the Blazor UI; audit event logged on download
 - .NET stores result; audit event logged
 
-**Acceptance:** Upload a test report with injected inconsistencies → PDF lists the injected red flags in the correct severity order with correct source page references.
+**Acceptance:**
+- PM flow: upload factsheet with PM context → PDF contains extraction tables with badges and disclaimer.
+- RM flow: upload a report with injected inconsistencies with RM context → PDF lists the red flags in the correct severity order with source page references.
+- Multi-group user: context selector is shown; single-group user: selector is hidden.
 
 ---
 
-## Phase 7 — Regulatory summary
+## Phase 6 — Regulatory summary
 
-**Deliverable:** The AI service can summarize a regulatory communication.
+**Deliverable:** The regulatory pipeline is complete; the context selector gains a third option available to all authenticated users.
 
 - POST `/analyze/regulatory` endpoint
 - Mistral call: `mistral-small-latest`, prompt from `prompts/regulatory/summary_v1.txt`
 - Response schema: `{executive_summary, regulatory_references[], required_actions[]}`
 - Regulatory references extracted from text only — nothing inferred
-- PDF sections: executive summary, regulatory references table, deadlines table (description, deadline date, source page)
+- **Regulatory** option added to the context selector for every logged-in user (not group-gated)
+- Report structure:
+  - Header: document name, analysis date, context (`Regulatory`), user
+  - Executive summary section
+  - Regulatory references table
+  - Deadlines table (description, deadline date, source page)
+  - Disclaimer
 - .NET stores result; audit event logged
 
-**Acceptance:** Upload a test regulatory PDF (Consob/ESMA style) → PDF report contains a correct executive summary, references only provisions cited in the text, and lists any deadlines found.
+**Acceptance:** Upload a test regulatory PDF → PDF report contains a correct executive summary, references only provisions explicitly cited in the text, and lists any deadlines found.
 
 ---
 
-## Phase 8 — Retention and audit trail
+## Phase 7 — Retention and audit trail
 
 **Deliverable:** 90-day cleanup runs automatically; full audit trail is in place.
 
@@ -201,7 +221,7 @@ Table created: `Analyses`.
 
 ---
 
-## Phase 9 — Test documents
+## Phase 8 — Test documents
 
 **Deliverable:** Three fictitious fund documents validate the full pipeline end to end.
 
@@ -219,7 +239,7 @@ Each document is generated programmatically (ReportLab or similar) so criticalit
 
 ---
 
-## Phase 10 — Polish and hardening
+## Phase 9 — Polish and hardening
 
 **Deliverable:** The POC is complete and ready for a demo.
 
@@ -227,7 +247,6 @@ Each document is generated programmatically (ReportLab or similar) so criticalit
 - Cross-source consistency check: deterministic Python check (no LLM) verifies percentage sums and repeated figures; discrepancies appended to red flag list with severity `warning`
 - Confidence badges visible and correct in all PM report tables
 - Disclaimer present in every generated PDF
-- Context selector in the UI: if a user belongs to both PM and RM groups, they choose which context to use before uploading
 - Error handling: clear user-facing messages for unsupported file types, text-free PDFs, Mistral API errors, and oversized documents
 - `without-Docker` startup instructions tested on a clean environment
 - Mistral account setup instructions validated (see technical analysis)
