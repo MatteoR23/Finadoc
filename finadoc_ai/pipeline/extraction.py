@@ -1,10 +1,14 @@
 """PM pipeline: structured extraction from a fund factsheet."""
 from __future__ import annotations
 
+import logging
+
 from config import MISTRAL_MODEL_SMALL
 from models.schemas import PMExtractionResult
 from pipeline.llm import call_mistral, load_prompt
 from pipeline.masking import mask_text
+
+logger = logging.getLogger(__name__)
 
 _DOCUMENT_TEXT_MARKER = "\nDocument text:\n{document_text}"
 
@@ -30,4 +34,7 @@ def run_pm_extraction(ingested_doc: dict) -> PMExtractionResult:
     system_prompt = prompt_template.replace(_DOCUMENT_TEXT_MARKER, "").rstrip()
 
     raw = call_mistral(MISTRAL_MODEL_SMALL, system_prompt, masked_text)
+    logger.debug("Mistral PM extraction raw response: %s", raw)
+    if not raw or raw == {}:
+        logger.warning("Mistral returned empty response — document may have no extractable data. Text length: %d", len(masked_text))
     return PMExtractionResult.model_validate(raw)

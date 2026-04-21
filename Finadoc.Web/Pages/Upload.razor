@@ -5,7 +5,6 @@
 @inject DocumentService DocumentSvc
 @inject AnalysisService AnalysisSvc
 @inject AuthenticationStateProvider AuthState
-@inject NavigationManager Nav
 
 <PageTitle>Upload — Finadoc</PageTitle>
 
@@ -125,7 +124,7 @@ else
     private string? _error;
     private string? _success;
     private Guid? _confirmDeleteId;
-    private HubConnection? _hub;
+    private CancellationTokenSource? _pollCts;
 
     protected override async Task OnInitializedAsync()
     {
@@ -136,34 +135,40 @@ else
         await RefreshListAsync();
     }
 
-    protected override async Task OnAfterRenderAsync(bool firstRender)
+    protected override Task OnAfterRenderAsync(bool firstRender)
     {
-        if (!firstRender) return;
+        if (firstRender) StartPollingIfNeeded();
+        return Task.CompletedTask;
+    }
 
-        _hub = new HubConnectionBuilder()
-            .WithUrl(Nav.ToAbsoluteUri("/hubs/analysis"), options =>
-            {
-                // Forward the auth cookie so the hub [Authorize] check passes
-                options.UseDefaultCredentials = true;
-            })
-            .WithAutomaticReconnect()
-            .Build();
+    private void StartPollingIfNeeded()
+    {
+        if (_pollCts is not null) return;
+        if (!HasPendingAnalyses()) return;
 
-        _hub.On<object>("AnalysisUpdate", async _ =>
+        _pollCts = new CancellationTokenSource();
+        _ = PollAsync(_pollCts.Token);
+    }
+
+    private async Task PollAsync(CancellationToken ct)
+    {
+        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(3));
+        while (!ct.IsCancellationRequested && await timer.WaitForNextTickAsync(ct).ConfigureAwait(false))
         {
             await RefreshAnalysesAsync();
             await InvokeAsync(StateHasChanged);
-        });
 
-        try
-        {
-            await _hub.StartAsync();
-        }
-        catch (Exception)
-        {
-            // Hub is non-critical: real-time updates degrade gracefully to manual refresh
+            if (!HasPendingAnalyses())
+            {
+                _pollCts?.Cancel();
+                _pollCts = null;
+                break;
+            }
         }
     }
+
+    private bool HasPendingAnalyses() =>
+        _analyses.Values.Any(a => a?.Status is "Queued" or "Running");
 
     private async Task HandleFileSelectedAsync(InputFileChangeEventArgs e)
     {
@@ -202,6 +207,7 @@ else
             _analyzing = null;
         }
         StateHasChanged();
+        StartPollingIfNeeded();
     }
 
     private async Task RefreshListAsync()
@@ -240,9 +246,10 @@ else
         await RefreshListAsync();
     }
 
-    public async ValueTask DisposeAsync()
+    public ValueTask DisposeAsync()
     {
-        if (_hub is not null)
-            await _hub.DisposeAsync();
+        _pollCts?.Cancel();
+        _pollCts?.Dispose();
+        return ValueTask.CompletedTask;
     }
 }

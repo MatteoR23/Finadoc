@@ -33,8 +33,8 @@ class AnalyzeRequest(BaseModel):
     def validate_document_s3_key(cls, v: str) -> str:
         if ".." in v or v.startswith("/"):
             raise ValueError("document_s3_key must not contain path traversal sequences")
-        if not v.startswith("uploads/"):
-            raise ValueError("document_s3_key must be within the uploads/ prefix")
+        if not v.startswith("documents/"):
+            raise ValueError("document_s3_key must be within the documents/ prefix")
         return v
 
     @field_validator("output_s3_prefix")
@@ -99,7 +99,7 @@ class ESGData(BaseModel):
     rating: str | None = None
     sustainable_exposure_pct: float | None = None
     controversies: str | None = None
-    source_page: int
+    source_page: int | None = None
     confidence: ConfidenceLevel
 
 
@@ -110,7 +110,7 @@ class AssetAllocation(BaseModel):
 
 
 class PMExtractionResult(BaseModel):
-    asset_allocation: AssetAllocation
+    asset_allocation: AssetAllocation = AssetAllocation()
     performance: PerformanceData | None = None
     transactions: list[Transaction] = []
     esg: ESGData | None = None

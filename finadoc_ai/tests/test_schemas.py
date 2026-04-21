@@ -145,7 +145,7 @@ def test_regulatory_result_with_actions() -> None:
 # ── AnalyzeRequest ────────────────────────────────────────────────────────────
 
 _VALID_REQUEST = {
-    "document_s3_key": "uploads/abc/doc.pdf",
+    "document_s3_key": "documents/abc/doc.pdf",
     "documents_bucket": "finadoc-documents",
     "document_format": "pdf",
     "outputs_bucket": "finadoc-outputs",
