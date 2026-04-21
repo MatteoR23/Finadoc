@@ -13,7 +13,8 @@
             "env": {
                 "ASPNETCORE_ENVIRONMENT": "Development",
                 "ASPNETCORE_URLS": "https://localhost:5001;http://localhost:5000",
-                "Storage__DataDir": "${workspaceFolder}/data"
+                "Storage__DataDir": "${workspaceFolder}/data",
+                "AiService__InternalApiKey": "dev-only-insecure-key"
             },
             "serverReadyAction": {
                 "action": "openExternally",
@@ -35,7 +36,8 @@
             "cwd": "${workspaceFolder}/finadoc_ai",
             "envFile": "${workspaceFolder}/.env",
             "env": {
-                "DATA_DIR": "${workspaceFolder}/data"
+                "DATA_DIR": "${workspaceFolder}/data",
+                "INTERNAL_API_KEY": "dev-only-insecure-key"
             },
             "jinja": true,
             "console": "integratedTerminal"

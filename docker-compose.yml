@@ -8,6 +8,7 @@ services:
       - ASPNETCORE_URLS=http://+:8080
       - MISTRAL_API_KEY=${MISTRAL_API_KEY}
       - AiService__BaseUrl=http://ai:8000
+      - AiService__InternalApiKey=${INTERNAL_API_KEY}
     volumes:
       - finadoc_data:/data
     depends_on:
@@ -20,6 +21,7 @@ services:
       - "8000"
     environment:
       - MISTRAL_API_KEY=${MISTRAL_API_KEY}
+      - INTERNAL_API_KEY=${INTERNAL_API_KEY}
     volumes:
       - finadoc_data:/data
     healthcheck:

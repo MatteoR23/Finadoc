@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 from enum import Enum
+from pathlib import Path
 from typing import Any
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
+
+import config
 
 
 class ConfidenceLevel(str, Enum):
@@ -23,6 +26,24 @@ class AnalyzeRequest(BaseModel):
     language: str = "auto"
     output_path: str
     user_context: UserContext
+
+    @field_validator("document_path")
+    @classmethod
+    def validate_document_path(cls, v: str) -> str:
+        resolved = Path(v).resolve()
+        uploads = Path(config.UPLOADS_DIR).resolve()
+        if not str(resolved).startswith(str(uploads)):
+            raise ValueError("document_path must be within the uploads directory")
+        return str(resolved)
+
+    @field_validator("output_path")
+    @classmethod
+    def validate_output_path(cls, v: str) -> str:
+        resolved = Path(v).resolve()
+        outputs = Path(config.OUTPUTS_DIR).resolve()
+        if not str(resolved).startswith(str(outputs)):
+            raise ValueError("output_path must be within the outputs directory")
+        return str(resolved)
 
 
 class AnalyzeResponse(BaseModel):
