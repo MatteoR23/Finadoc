@@ -1,0 +1,8 @@
+services:
+  minio:
+    ports:
+      - "9000:9000"
+
+  ai:
+    ports:
+      - "8000:8000"

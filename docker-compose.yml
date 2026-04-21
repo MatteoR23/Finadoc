@@ -32,6 +32,7 @@ services:
       - "8000"
     environment:
       - MISTRAL_API_KEY=${MISTRAL_API_KEY}
+      - INTERNAL_API_KEY=${INTERNAL_API_KEY}
     volumes:
       - finadoc_data:/data
     healthcheck:

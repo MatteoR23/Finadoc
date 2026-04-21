@@ -87,9 +87,40 @@ Conversational Q&A, automatic classification, semantic search, document comparis
 
 ## Getting started
 
+### Full stack in Docker (normal usage)
+
 ```bash
 cp .env.example .env
 # Fill in MISTRAL_API_KEY and INTERNAL_API_KEY in .env
 docker compose up --build
 # → http://localhost:8080 (first run prompts for admin password)
 ```
+
+### Running the .NET app locally (hot-reload / debug)
+
+Use this when you want to run the .NET app with `dotnet run` while keeping the dependencies (PostgreSQL, MinIO, AI service) in Docker.
+
+`docker-compose.override.yml` is already committed and exposes the ports needed to reach Docker services from the host (MinIO on 9000, AI service on 8000). Docker Compose picks it up automatically — no extra flags needed.
+
+**1. Start the dependencies:**
+
+```bash
+docker compose up postgres minio minio-init ai
+```
+
+**2. Set the `InternalApiKey` for the .NET app** (once per machine, never committed):
+
+```bash
+cd Finadoc.Web
+dotnet user-secrets set "AiService:InternalApiKey" "<value from .env>"
+```
+
+**3. Run the app:**
+
+```bash
+cd Finadoc.Web
+dotnet run
+# → http://localhost:5000 (or the port shown in the terminal)
+```
+
+> `appsettings.json` already points to `localhost` for all services, so no extra configuration is needed.

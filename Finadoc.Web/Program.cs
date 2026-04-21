@@ -23,7 +23,10 @@ builder.Services.AddDataProtection()
 
 // Blazor Server
 builder.Services.AddRazorPages();
-builder.Services.AddServerSideBlazor();
+builder.Services.AddServerSideBlazor(options =>
+{
+    options.DetailedErrors = builder.Environment.IsDevelopment();
+});
 
 // EF Core + PostgreSQL
 builder.Services.AddDbContext<AppDbContext>(options =>

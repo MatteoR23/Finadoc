@@ -13,7 +13,7 @@ public class S3StorageService(IAmazonS3 s3, ILogger<S3StorageService> logger) : 
             Key = key,
             InputStream = content,
             ContentType = contentType,
-            DisablePayloadSigning = true,
+            UseChunkEncoding = false,
         };
         await s3.PutObjectAsync(request, ct);
         logger.LogDebug("Uploaded s3://{Bucket}/{Key}", bucket, key);
