@@ -178,6 +178,34 @@ app.UseHangfireDashboard("/hangfire", new DashboardOptions
 });
 app.MapFallbackToPage("/_Host");
 
+// PDF download endpoint — streams report.pdf from object storage
+app.MapGet("/api/analysis/{id:guid}/download", async (
+    Guid id,
+    HttpContext ctx,
+    AppDbContext db,
+    IStorageService storage,
+    StorageSettings storageSettings,
+    AuditService audit) =>
+{
+    var userIdStr = ctx.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+    if (!Guid.TryParse(userIdStr, out var userId))
+        return Results.Forbid();
+
+    var analysis = await db.Analyses
+        .Include(a => a.Document)
+        .FirstOrDefaultAsync(a => a.Id == id && a.Document.UserId == userId);
+
+    if (analysis is null) return Results.NotFound();
+    if (analysis.PdfPath is null || analysis.Status != "Completed")
+        return Results.BadRequest(new { error = "Report not ready." });
+
+    var stream = await storage.DownloadAsync(storageSettings.OutputsBucket, analysis.PdfPath);
+    await audit.LogAsync("pdf_download", userId, "Analysis", id.ToString());
+
+    var fileName = $"finadoc-{analysis.GroupContext.ToLower()}-report.pdf";
+    return Results.File(stream, "application/pdf", fileName);
+}).RequireAuthorization();
+
 // Health check: call Python AI service on startup and log the result
 await CheckAiServiceHealthAsync(app);
 

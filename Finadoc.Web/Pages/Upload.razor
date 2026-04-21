@@ -23,6 +23,24 @@
                disabled="@_uploading" />
 </div>
 
+@if (_userGroups.Count > 1)
+{
+    <div class="context-selector mt-2">
+        <span class="context-selector-label">Pipeline:</span>
+        @foreach (var group in _userGroups)
+        {
+            <label class="context-selector-option">
+                <input type="radio"
+                       name="groupContext"
+                       value="@group"
+                       checked="@(_groupContext == group)"
+                       @onchange="() => _groupContext = group" />
+                @group
+            </label>
+        }
+    </div>
+}
+
 @if (_uploading)
 {
     <div class="alert alert-warning mt-1">Uploading&hellip;</div>
@@ -114,8 +132,15 @@ else
     </table>
 }
 
+<style>
+    .context-selector { display: flex; align-items: center; gap: 1rem; padding: 0.5rem 0; }
+    .context-selector-label { font-weight: 600; font-size: 0.9rem; }
+    .context-selector-option { display: flex; align-items: center; gap: 0.3rem; cursor: pointer; font-size: 0.9rem; }
+</style>
+
 @code {
     private Guid _userId;
+    private List<string> _userGroups = [];
     private string _groupContext = string.Empty;
     private List<Document>? _docs;
     private Dictionary<Guid, Analysis?> _analyses = [];
@@ -131,7 +156,13 @@ else
         var state = await AuthState.GetAuthenticationStateAsync();
         var idStr = state.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
         _userId = Guid.TryParse(idStr, out var id) ? id : Guid.Empty;
-        _groupContext = state.User.FindFirst(ClaimTypes.Role)?.Value ?? string.Empty;
+        _userGroups = state.User
+            .FindAll(ClaimTypes.Role)
+            .Select(c => c.Value)
+            .Where(v => v is "PM" or "RM")
+            .Distinct()
+            .ToList();
+        _groupContext = _userGroups.Count == 1 ? _userGroups[0] : string.Empty;
         await RefreshListAsync();
     }
 

@@ -33,6 +33,17 @@ def run_pm_extraction(ingested_doc: dict) -> PMExtractionResult:
     # Strip the "{document_text}" placeholder section — document goes as user message
     system_prompt = prompt_template.replace(_DOCUMENT_TEXT_MARKER, "").rstrip()
 
+    # Append language directive to LLM
+    language = ingested_doc.get("language", "en")
+    lang_name = "Italian" if language == "it" else "English"
+    directive = (
+        f"\n\nIMPORTANT: All free-text string values (label, description, detail, "
+        f"controversies, rating, instrument names) MUST be written in {lang_name}. "
+        f"Do NOT translate enum values (severity, confidence levels), field names, "
+        f"currency codes, ISIN codes, or dates."
+    )
+    system_prompt = system_prompt + directive
+
     raw = call_mistral(MISTRAL_MODEL_SMALL, system_prompt, masked_text)
     logger.debug("Mistral PM extraction raw response: %s", raw)
     if not raw or raw == {}:

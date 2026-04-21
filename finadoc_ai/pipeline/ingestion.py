@@ -1,11 +1,43 @@
 """Document ingestion: PDF (PyMuPDF + pdfplumber) and Excel (pandas/openpyxl)."""
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 import fitz  # PyMuPDF
 import pandas as pd
 import pdfplumber
+from langdetect import detect, DetectorFactory, LangDetectException
+
+logger = logging.getLogger(__name__)
+DetectorFactory.seed = 42
+
+
+def _detect_language(pages: list[dict]) -> str:
+    """Detect document language (Italian or English).
+
+    Stitches the first ~2000 chars of page text and runs langdetect.
+    Returns "it" for Italian, "en" for English, or "en" as fallback.
+    """
+    full_text = "\n".join(p.get("text", "") for p in pages)[:2000]
+    if not full_text.strip():
+        logger.warning("Could not detect language: document text is empty, defaulting to English.")
+        return "en"
+
+    try:
+        detected = detect(full_text)
+        if detected == "it":
+            logger.info("Detected Italian document.")
+            return "it"
+        elif detected == "en":
+            logger.info("Detected English document.")
+            return "en"
+        else:
+            logger.warning("Language detection returned %r (not it/en), defaulting to English.", detected)
+            return "en"
+    except LangDetectException as e:
+        logger.warning("Language detection failed: %s, defaulting to English.", e)
+        return "en"
 
 
 def ingest_document(path: str, fmt: str) -> dict:
@@ -53,7 +85,8 @@ def _ingest_pdf(path: str) -> dict:
             if tables:
                 pages[i]["tables"] = tables
 
-    return {"pages": pages, "format": "pdf", "language_hint": "auto"}
+    language = _detect_language(pages)
+    return {"pages": pages, "format": "pdf", "language": language}
 
 
 def _ingest_excel(path: str) -> dict:
@@ -69,4 +102,5 @@ def _ingest_excel(path: str) -> dict:
             "tables": [df.values.tolist()],
         })
 
-    return {"pages": pages, "format": "xlsx", "language_hint": "auto"}
+    language = _detect_language(pages)
+    return {"pages": pages, "format": "xlsx", "language": language}

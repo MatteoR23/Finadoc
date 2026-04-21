@@ -27,6 +27,13 @@ public class AnalysisService(AppDbContext db, IBackgroundJobClient jobs)
         return analysis;
     }
 
+    public async Task<List<Analysis>> GetByUserAsync(Guid userId) =>
+        await db.Analyses
+            .Include(a => a.Document)
+            .Where(a => a.Document.UserId == userId)
+            .OrderByDescending(a => a.StartedAt)
+            .ToListAsync();
+
     public async Task<Dictionary<Guid, Analysis?>> GetLatestByDocumentIdsAsync(IEnumerable<Guid> docIds)
     {
         var ids = docIds.ToList();
