@@ -95,3 +95,4 @@ volumes:
   postgres_data:
   minio_data:
   app_data:
+  finadoc_data:
