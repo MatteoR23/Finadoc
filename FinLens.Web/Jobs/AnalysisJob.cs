@@ -13,6 +13,7 @@ public class AnalysisJob(
     AppDbContext db,
     IHttpClientFactory httpClientFactory,
     IHubContext<AnalysisHub> hub,
+    AnalysisProgressBroadcaster broadcaster,
     AuditService audit,
     IConfiguration config,
     ILogger<AnalysisJob> logger)
@@ -30,13 +31,16 @@ public class AnalysisJob(
         }
 
         analysis.Status = "Running";
+        analysis.Step = null;
         await db.SaveChangesAsync();
-        await NotifyAsync(userId, analysisId, "Running");
+        await NotifyAsync(userId, analysisId, "Running", null);
 
         try
         {
             var outputsBucket = config["Storage:OutputsBucket"] ?? "finlens-outputs";
             var documentsBucket = config["Storage:DocumentsBucket"] ?? "finlens-documents";
+            var appBaseUrl = config["App:BaseUrl"] ?? "http://localhost:8080";
+            var callbackUrl = $"{appBaseUrl}/internal/analysis/{analysisId}/progress";
 
             var requestBody = new AiAnalyzeRequest(
                 DocumentS3Key: analysis.Document.StorageKey,
@@ -45,7 +49,9 @@ public class AnalysisJob(
                 Language: analysis.Document.Language,
                 OutputsBucket: outputsBucket,
                 OutputS3Prefix: $"analyses/{analysisId}/",
-                UserContext: new AiUserContext(userId.ToString(), [groupContext]));
+                UserContext: new AiUserContext(userId.ToString(), [groupContext]),
+                AnalysisId: analysisId,
+                CallbackUrl: callbackUrl);
 
             var client = httpClientFactory.CreateClient("AiService");
             var response = await client.PostAsJsonAsync($"/analyze/{groupContext.ToLower()}", requestBody);
@@ -60,12 +66,13 @@ public class AnalysisJob(
 
             var result = await response.Content.ReadFromJsonAsync<AiAnalyzeResponse>();
             analysis.Status = "Completed";
+            analysis.Step = null;
             analysis.PdfPath = result?.ResultS3Key;
             analysis.CompletedAt = DateTime.UtcNow;
             await db.SaveChangesAsync();
 
             await audit.LogAsync("analysis_generated", userId, "Analysis", analysisId.ToString(), "success");
-            await NotifyAsync(userId, analysisId, "Completed");
+            await NotifyAsync(userId, analysisId, "Completed", null);
         }
         catch (Exception ex)
         {
@@ -78,16 +85,20 @@ public class AnalysisJob(
     private async Task FailAsync(Analysis analysis, Guid userId, string reason)
     {
         analysis.Status = "Failed";
+        analysis.Step = null;
         analysis.CompletedAt = DateTime.UtcNow;
         await db.SaveChangesAsync();
         await audit.LogAsync("analysis_failed", userId, "Analysis", analysis.Id.ToString(), "failure",
             $"{{\"reason\":\"{EscapeJson(reason)}\"}}");
-        await NotifyAsync(userId, analysis.Id, "Failed");
+        await NotifyAsync(userId, analysis.Id, "Failed", null);
     }
 
-    private Task NotifyAsync(Guid userId, Guid analysisId, string status)
-        => hub.Clients.Group($"user-{userId}")
-            .SendAsync("AnalysisUpdate", new { analysisId, status });
+    private async Task NotifyAsync(Guid userId, Guid analysisId, string status, string? step)
+    {
+        await hub.Clients.Group($"user-{userId}")
+            .SendAsync("AnalysisUpdate", new { analysisId, status, step });
+        await broadcaster.BroadcastAsync(analysisId, userId, status, step);
+    }
 
     private static string EscapeJson(string v) =>
         v.Replace("\\", "\\\\").Replace("\"", "\\\"").Replace("\n", "\\n");
@@ -100,7 +111,9 @@ internal record AiAnalyzeRequest(
     [property: JsonPropertyName("language")] string Language,
     [property: JsonPropertyName("outputs_bucket")] string OutputsBucket,
     [property: JsonPropertyName("output_s3_prefix")] string OutputS3Prefix,
-    [property: JsonPropertyName("user_context")] AiUserContext UserContext);
+    [property: JsonPropertyName("user_context")] AiUserContext UserContext,
+    [property: JsonPropertyName("analysis_id")] Guid AnalysisId,
+    [property: JsonPropertyName("callback_url")] string CallbackUrl);
 
 internal record AiUserContext(
     [property: JsonPropertyName("user_id")] string UserId,

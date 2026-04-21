@@ -27,6 +27,8 @@ class AnalyzeRequest(BaseModel):
     outputs_bucket: str
     output_s3_prefix: str
     user_context: UserContext
+    analysis_id: str = ""
+    callback_url: str = ""
 
     @field_validator("document_s3_key")
     @classmethod

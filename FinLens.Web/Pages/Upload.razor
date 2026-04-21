@@ -5,6 +5,7 @@
 @inject DocumentService DocumentSvc
 @inject AnalysisService AnalysisSvc
 @inject AuthenticationStateProvider AuthState
+@inject AnalysisProgressBroadcaster Broadcaster
 
 <PageTitle>Upload — FinLens</PageTitle>
 
@@ -97,6 +98,10 @@ else
                         else
                         {
                             <span class="badge badge-status-@analysis.Status.ToLower()">@analysis.Status</span>
+                            @if (analysis.Status == "Running" && analysis.Step is not null)
+                            {
+                                <br /><span class="text-muted small">@StepLabel(analysis.Step)</span>
+                            }
                         }
                     </td>
                     <td class="action-cell">
@@ -149,7 +154,6 @@ else
     private string? _error;
     private string? _success;
     private Guid? _confirmDeleteId;
-    private CancellationTokenSource? _pollCts;
 
     protected override async Task OnInitializedAsync()
     {
@@ -163,43 +167,19 @@ else
             .Distinct()
             .ToList();
         _groupContext = _userGroups.Count == 1 ? _userGroups[0] : string.Empty;
+        Broadcaster.OnUpdate += HandleProgressUpdateAsync;
         await RefreshListAsync();
     }
 
-    protected override Task OnAfterRenderAsync(bool firstRender)
+    private async Task HandleProgressUpdateAsync(AnalysisProgressEvent e)
     {
-        if (firstRender) StartPollingIfNeeded();
-        return Task.CompletedTask;
-    }
-
-    private void StartPollingIfNeeded()
-    {
-        if (_pollCts is not null) return;
-        if (!HasPendingAnalyses()) return;
-
-        _pollCts = new CancellationTokenSource();
-        _ = PollAsync(_pollCts.Token);
-    }
-
-    private async Task PollAsync(CancellationToken ct)
-    {
-        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(3));
-        while (!ct.IsCancellationRequested && await timer.WaitForNextTickAsync(ct).ConfigureAwait(false))
+        if (e.UserId != _userId) return;
+        await InvokeAsync(async () =>
         {
             await RefreshAnalysesAsync();
-            await InvokeAsync(StateHasChanged);
-
-            if (!HasPendingAnalyses())
-            {
-                _pollCts?.Cancel();
-                _pollCts = null;
-                break;
-            }
-        }
+            StateHasChanged();
+        });
     }
-
-    private bool HasPendingAnalyses() =>
-        _analyses.Values.Any(a => a?.Status is "Queued" or "Running");
 
     private async Task HandleFileSelectedAsync(InputFileChangeEventArgs e)
     {
@@ -238,7 +218,6 @@ else
             _analyzing = null;
         }
         StateHasChanged();
-        StartPollingIfNeeded();
     }
 
     private async Task RefreshListAsync()
@@ -277,10 +256,17 @@ else
         await RefreshListAsync();
     }
 
+    private static string StepLabel(string step) => step switch
+    {
+        "ingesting"  => "Reading document",
+        "analyzing"  => "Running AI analysis",
+        "generating" => "Generating PDF",
+        _            => step,
+    };
+
     public ValueTask DisposeAsync()
     {
-        _pollCts?.Cancel();
-        _pollCts?.Dispose();
+        Broadcaster.OnUpdate -= HandleProgressUpdateAsync;
         return ValueTask.CompletedTask;
     }
 }

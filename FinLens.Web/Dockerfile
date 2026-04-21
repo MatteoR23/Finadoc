@@ -1,7 +1,7 @@
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
-COPY Finadoc.Web.csproj .
+COPY FinLens.Web.csproj .
 RUN dotnet restore
 
 COPY . .
@@ -13,4 +13,4 @@ WORKDIR /app
 COPY --from=build /app/publish .
 
 EXPOSE 8080
-ENTRYPOINT ["dotnet", "Finadoc.Web.dll"]
+ENTRYPOINT ["dotnet", "FinLens.Web.dll"]

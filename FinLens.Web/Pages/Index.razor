@@ -1,7 +1,113 @@
 @page "/"
 @attribute [Microsoft.AspNetCore.Authorization.Authorize]
 
-<PageTitle>FinLens</PageTitle>
+@inject DocumentService DocumentSvc
+@inject AnalysisService AnalysisSvc
+@inject AuthenticationStateProvider AuthState
 
-<h1>Welcome to FinLens</h1>
-<p>Use the <a href="/upload" class="nav-link" style="display:inline">Upload</a> link in the nav bar to upload a financial document and start an analysis.</p>
+<PageTitle>Dashboard — FinLens</PageTitle>
+
+<div class="page-header">
+    <h1>Dashboard</h1>
+    <a href="/upload" class="btn btn-primary">Upload document</a>
+</div>
+
+@if (_docs is null)
+{
+    <p class="text-muted">Loading&hellip;</p>
+}
+else
+{
+    <div class="stat-row">
+        <div class="stat-card">
+            <span class="stat-value">@_docs.Count</span>
+            <span class="stat-label">Documents</span>
+        </div>
+        <div class="stat-card">
+            <span class="stat-value stat-value-warning">@_running</span>
+            <span class="stat-label">Running</span>
+        </div>
+        <div class="stat-card">
+            <span class="stat-value stat-value-success">@_completed</span>
+            <span class="stat-label">Completed</span>
+        </div>
+        <div class="stat-card">
+            <span class="stat-value stat-value-danger">@_failed</span>
+            <span class="stat-label">Failed</span>
+        </div>
+    </div>
+
+    <div class="section-header mt-3">
+        <h2 class="section-title">Recent analyses</h2>
+        @if (_analyses.Count > 5)
+        {
+            <a href="/results" class="text-muted small">View all &rarr;</a>
+        }
+    </div>
+
+    @if (_analyses.Count == 0)
+    {
+        <div class="empty-state">
+            <p>No analyses yet.</p>
+            <a href="/upload" class="btn btn-primary btn-sm">Upload your first document</a>
+        </div>
+    }
+    else
+    {
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Document</th>
+                    <th>Pipeline</th>
+                    <th>Started</th>
+                    <th>Status</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var analysis in _analyses.Take(5))
+                {
+                    <tr>
+                        <td>@analysis.Document.OriginalFileName</td>
+                        <td><span class="badge badge-pipeline-@analysis.GroupContext.ToLower()">@analysis.GroupContext</span></td>
+                        <td>@analysis.StartedAt.ToString("yyyy-MM-dd HH:mm")</td>
+                        <td><span class="badge badge-status-@analysis.Status.ToLower()">@analysis.Status</span></td>
+                        <td class="action-cell">
+                            @if (analysis.Status == "Completed" && analysis.PdfPath is not null)
+                            {
+                                <a href="/api/analysis/@analysis.Id/download" class="btn btn-success btn-sm">Download PDF</a>
+                            }
+                            else if (analysis.Status is "Queued" or "Running")
+                            {
+                                <span class="text-muted small">Processing&hellip;</span>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+}
+
+@code {
+    private Guid _userId;
+    private List<Document>? _docs;
+    private List<Analysis> _analyses = [];
+    private int _running;
+    private int _completed;
+    private int _failed;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var state = await AuthState.GetAuthenticationStateAsync();
+        var idStr = state.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        _userId = Guid.TryParse(idStr, out var id) ? id : Guid.Empty;
+
+        _docs = await DocumentSvc.GetByUserAsync(_userId);
+        _analyses = await AnalysisSvc.GetByUserAsync(_userId);
+
+        _running   = _analyses.Count(a => a.Status is "Queued" or "Running");
+        _completed = _analyses.Count(a => a.Status == "Completed");
+        _failed    = _analyses.Count(a => a.Status == "Failed");
+    }
+}

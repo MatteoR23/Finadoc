@@ -32,6 +32,7 @@ public class AnalysisService(AppDbContext db, IBackgroundJobClient jobs)
             .Include(a => a.Document)
             .Where(a => a.Document.UserId == userId)
             .OrderByDescending(a => a.StartedAt)
+            .AsNoTracking()
             .ToListAsync();
 
     public async Task<Dictionary<Guid, Analysis?>> GetLatestByDocumentIdsAsync(IEnumerable<Guid> docIds)
@@ -40,6 +41,7 @@ public class AnalysisService(AppDbContext db, IBackgroundJobClient jobs)
         var analyses = await db.Analyses
             .Where(a => ids.Contains(a.DocumentId))
             .OrderByDescending(a => a.StartedAt)
+            .AsNoTracking()
             .ToListAsync();
 
         return analyses

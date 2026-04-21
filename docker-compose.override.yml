@@ -1,4 +1,8 @@
 services:
+  app:
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+
   minio:
     ports:
       - "9000:9000"

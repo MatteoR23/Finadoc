@@ -1,9 +1,11 @@
 import logging
 import tempfile
 from datetime import datetime, timezone
+from pathlib import Path
+
+import httpx
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
-from pathlib import Path
 
 import config
 from models.schemas import AnalyzeRequest, AnalyzeResponse
@@ -17,6 +19,21 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="FinLens AI Service", version="0.1.0")
+
+
+async def _report_progress(callback_url: str, step: str) -> None:
+    if not callback_url:
+        return
+    try:
+        async with httpx.AsyncClient() as client:
+            await client.post(
+                callback_url,
+                json={"step": step},
+                headers={"X-Internal-Api-Key": config.INTERNAL_API_KEY},
+                timeout=5,
+            )
+    except Exception as exc:
+        logger.warning("Progress callback failed: %s", exc)
 
 
 @app.middleware("http")
@@ -39,6 +56,7 @@ async def analyze_pm(request: AnalyzeRequest) -> AnalyzeResponse:
     """PM pipeline: structured extraction from a fund factsheet."""
     warnings: list[str] = []
 
+    await _report_progress(request.callback_url, "ingesting")
     try:
         local_path = s3.download_to_tempfile(request.documents_bucket, request.document_s3_key)
     except Exception as exc:
@@ -52,6 +70,7 @@ async def analyze_pm(request: AnalyzeRequest) -> AnalyzeResponse:
     finally:
         local_path.unlink(missing_ok=True)
 
+    await _report_progress(request.callback_url, "analyzing")
     result = run_pm_extraction(ingested)
 
     # Upload extraction JSON (kept for debugging)
@@ -63,7 +82,7 @@ async def analyze_pm(request: AnalyzeRequest) -> AnalyzeResponse:
         logger.error("Failed to upload JSON to %s/%s: %s", request.outputs_bucket, json_key, exc)
         warnings.append(f"JSON upload failed: {exc}")
 
-    # Generate and upload PDF report
+    await _report_progress(request.callback_url, "generating")
     pdf_key = f"{request.output_s3_prefix}report.pdf"
     with tempfile.TemporaryDirectory() as tmp_dir:
         pdf_data = {
@@ -97,6 +116,7 @@ async def analyze_rm(request: AnalyzeRequest) -> AnalyzeResponse:
     """RM pipeline: red flag detection in a financial report."""
     warnings: list[str] = []
 
+    await _report_progress(request.callback_url, "ingesting")
     try:
         local_path = s3.download_to_tempfile(request.documents_bucket, request.document_s3_key)
     except Exception as exc:
@@ -110,6 +130,7 @@ async def analyze_rm(request: AnalyzeRequest) -> AnalyzeResponse:
     finally:
         local_path.unlink(missing_ok=True)
 
+    await _report_progress(request.callback_url, "analyzing")
     result = run_rm_analysis(ingested)
 
     # Upload red flags JSON (kept for debugging)
@@ -121,7 +142,7 @@ async def analyze_rm(request: AnalyzeRequest) -> AnalyzeResponse:
         logger.error("Failed to upload JSON to %s/%s: %s", request.outputs_bucket, json_key, exc)
         warnings.append(f"JSON upload failed: {exc}")
 
-    # Generate and upload PDF report
+    await _report_progress(request.callback_url, "generating")
     pdf_key = f"{request.output_s3_prefix}report.pdf"
     with tempfile.TemporaryDirectory() as tmp_dir:
         pdf_data = {

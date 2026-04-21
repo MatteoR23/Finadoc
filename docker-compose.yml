@@ -18,6 +18,7 @@ services:
       - Storage__DocumentsBucket=finlens-documents
       - Storage__OutputsBucket=finlens-outputs
       - DataProtection__KeysPath=/data/keys
+      - App__BaseUrl=http://app:8080
     volumes:
       - app_data:/data
     depends_on:

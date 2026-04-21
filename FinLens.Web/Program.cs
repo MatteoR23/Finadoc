@@ -11,6 +11,7 @@ using Hangfire.PostgreSql;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -97,6 +98,7 @@ builder.Services.AddHangfireServer(options =>
 });
 
 // Application services
+builder.Services.AddSingleton<AnalysisProgressBroadcaster>();
 builder.Services.AddScoped<AuditService>();
 builder.Services.AddScoped<UserService>();
 builder.Services.AddScoped<DocumentService>();
@@ -117,7 +119,7 @@ builder.Services.AddHttpClient("AiService", client =>
 {
     var baseUrl = builder.Configuration["AiService:BaseUrl"] ?? "http://localhost:8000";
     client.BaseAddress = new Uri(baseUrl);
-    client.Timeout = TimeSpan.FromMinutes(5);
+    client.Timeout = TimeSpan.FromMinutes(15);
     client.DefaultRequestHeaders.Add("X-Internal-Api-Key", internalApiKey);
 });
 
@@ -206,11 +208,35 @@ app.MapGet("/api/analysis/{id:guid}/download", async (
     return Results.File(stream, "application/pdf", fileName);
 }).RequireAuthorization();
 
+// Internal progress callback — Python calls this at each pipeline step
+app.MapPost("/internal/analysis/{id:guid}/progress", async (
+    Guid id,
+    ProgressUpdateRequest body,
+    HttpContext ctx,
+    AppDbContext db,
+    AnalysisProgressBroadcaster broadcaster,
+    IConfiguration config) =>
+{
+    var key = ctx.Request.Headers["X-Internal-Api-Key"].FirstOrDefault();
+    if (key != config["AiService:InternalApiKey"]) return Results.Forbid();
+
+    var analysis = await db.Analyses
+        .Include(a => a.Document)
+        .FirstOrDefaultAsync(a => a.Id == id);
+    if (analysis is null) return Results.NotFound();
+
+    analysis.Step = body.Step;
+    await db.SaveChangesAsync();
+
+    await broadcaster.BroadcastAsync(id, analysis.Document.UserId, analysis.Status, body.Step);
+
+    return Results.Ok();
+}).AllowAnonymous();
+
 // Health check: call Python AI service on startup and log the result
 await CheckAiServiceHealthAsync(app);
 
 app.Run();
-
 
 static async Task CheckAiServiceHealthAsync(WebApplication app)
 {
@@ -230,3 +256,5 @@ static async Task CheckAiServiceHealthAsync(WebApplication app)
         logger.LogWarning(ex, "AI service health check failed — service may not be running yet.");
     }
 }
+
+record ProgressUpdateRequest(string Step);
