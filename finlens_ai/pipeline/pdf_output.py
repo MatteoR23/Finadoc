@@ -81,6 +81,8 @@ _I18N: dict[str, dict[str, str]] = {
         "esg_controversies": "Controversies",
         "red_flags": "Red Flags",
         "no_red_flags": "No red flags detected.",
+        "data_quality": "Data Quality Checks",
+        "no_dq_flags": "No data quality issues detected.",
         "pages_label": "Pages:",
         "fields_label": "Fields:",
         "disclaimer": "This report was generated automatically by an AI system. All data should be verified against the source document.",
@@ -113,8 +115,10 @@ _I18N: dict[str, dict[str, str]] = {
         "esg_rating": "Rating",
         "esg_sustainable": "Esposizione sostenibile",
         "esg_controversies": "Controversie",
-        "red_flags": "Segnalazioni",
+        "red_flags": "Segnalazioni di Rischio",
         "no_red_flags": "Nessuna segnalazione rilevata.",
+        "data_quality": "Controlli di Qualità dei Dati",
+        "no_dq_flags": "Nessun problema di qualità dei dati rilevato.",
         "pages_label": "Pagine:",
         "fields_label": "Campi:",
         "disclaimer": "Questo report è stato generato automaticamente da un sistema di IA. Tutti i dati devono essere verificati rispetto al documento originale.",
@@ -359,6 +363,43 @@ def _build_rm_sections(red_flags: list[dict], lang: str = "en") -> list:
     return flowables
 
 
+def _build_dq_sections(data_quality_flags: list[dict], lang: str = "en") -> list:
+    flowables: list = []
+    flowables.append(Paragraph(_t(lang, "data_quality"), _STYLE_HEADING))
+
+    if not data_quality_flags:
+        flowables.append(Paragraph(_t(lang, "no_dq_flags"), _STYLE_BODY))
+        flowables.append(Spacer(1, 8))
+        return flowables
+
+    sorted_flags = sorted(data_quality_flags, key=lambda f: _SEVERITY_ORDER.get(f.get("severity", "info"), 99))
+
+    for flag in sorted_flags:
+        sev = flag.get("severity", "info")
+        badge_cell = _badge(sev.upper(), _SEVERITY_COLORS.get(sev, colors.grey), width=58)
+
+        pages_str = ", ".join(str(p) for p in flag.get("source_pages", []))
+        fields_str = ", ".join(flag.get("affected_fields", []))
+        detail_html = (
+            f'<b>{flag.get("id", "")}: {flag.get("description", "")}</b><br/>'
+            f'{flag.get("detail", "")}<br/>'
+            f'<font color="#6c757d">{_t(lang, "pages_label")} {pages_str or "—"} &nbsp;|&nbsp; {_t(lang, "fields_label")} {fields_str or "—"}</font>'
+        )
+        detail_cell = Paragraph(detail_html, _STYLE_BODY)
+
+        row_table = Table([[badge_cell, detail_cell]], colWidths=[65, 390])
+        row_table.setStyle(TableStyle([
+            ("VALIGN",       (0, 0), (-1, -1), "TOP"),
+            ("LEFTPADDING",  (1, 0), (1, 0), 10),
+            ("TOPPADDING",   (0, 0), (-1, -1), 4),
+            ("BOTTOMPADDING",(0, 0), (-1, -1), 4),
+        ]))
+
+        flowables.append(KeepTogether([row_table, Spacer(1, 6)]))
+
+    return flowables
+
+
 def _build_disclaimer(lang: str = "en") -> list:
     return [
         Spacer(1, 12),
@@ -403,6 +444,8 @@ def generate_pdf(data: dict[str, Any], output_path: str) -> str:
         flowables += _build_pm_sections(data.get("extraction", {}), lang)
     elif pipeline == "rm":
         flowables += _build_rm_sections(data.get("red_flags", []), lang)
+    elif pipeline == "dq":
+        flowables += _build_dq_sections(data.get("data_quality_flags", []), lang)
 
     flowables += _build_disclaimer(lang)
     doc.build(flowables)

@@ -166,6 +166,11 @@ namespace FinLens.Web.Migrations
                         {
                             Id = 2,
                             Name = "RM"
+                        },
+                        new
+                        {
+                            Id = 3,
+                            Name = "DQ"
                         });
                 });
 

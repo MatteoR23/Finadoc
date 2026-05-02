@@ -29,7 +29,7 @@ Four Docker services collaborate. The **.NET 10 / Blazor Server app** serves the
 - **Data residency**: EU/Italy only. No non-EU external services.
 - **PII masking**: Presidio-based, not a regex shortcut. Masking happens before any text reaches Mistral. The placeholder mapping lives in memory only — never written to disk.
 - **Retention**: documents, analyses, and audit logs are deleted after 90 days. Cleanup runs daily as a background worker.
-- **Mistral models**: use `mistral-small-latest` by default; switch to `mistral-large-latest` only for RM red flag detection (multi-step numeric reasoning).
+- **Mistral models**: use `mistral-small-latest` by default (PM extraction, DQ data quality); switch to `mistral-large-latest` only for RM risk management analysis (complex financial risk reasoning).
 - **No chunking**: documents are capped at 10 pages — they fit within the 32K-token context window.
 - **LDAPs**: interface and config model are defined; actual directory binding is NOT implemented in the POC (stub throws `NotImplementedException`).
 - **Scanned PDFs**: rejected — pipeline requires a text layer.

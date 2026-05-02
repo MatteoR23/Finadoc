@@ -60,6 +60,10 @@ else
                     <input type="checkbox" @bind="_profileModel.IsRm" />
                     Risk Manager (RM)
                 </label>
+                <label class="checkbox-label">
+                    <input type="checkbox" @bind="_profileModel.IsDq" />
+                    Data Quality (DQ)
+                </label>
             </fieldset>
 
             <div class="form-actions">
@@ -163,6 +167,7 @@ else
         _profileModel.IsAdmin  = _user.IsAdmin;
         _profileModel.IsPm     = _user.UserGroups.Any(ug => ug.GroupId == 1);
         _profileModel.IsRm     = _user.UserGroups.Any(ug => ug.GroupId == 2);
+        _profileModel.IsDq     = _user.UserGroups.Any(ug => ug.GroupId == 3);
     }
 
     private async Task SaveProfile()
@@ -173,6 +178,7 @@ else
             var groupIds = new List<int>();
             if (_profileModel.IsPm) groupIds.Add(1);
             if (_profileModel.IsRm) groupIds.Add(2);
+            if (_profileModel.IsDq) groupIds.Add(3);
 
             await UserService.UpdateUserAsync(UserId, _profileModel.Username, _profileModel.IsAdmin, groupIds, _currentUserId);
             _user = await UserService.GetUserAsync(UserId);
@@ -235,6 +241,7 @@ else
         public bool IsAdmin { get; set; }
         public bool IsPm { get; set; }
         public bool IsRm { get; set; }
+        public bool IsDq { get; set; }
     }
 
     private sealed class PwModel

@@ -141,10 +141,11 @@ Table created: `Analyses`.
 
 - At upload time, the UI shows a context selector (radio buttons or dropdown) with only the options the logged-in user is entitled to:
   - **PM — Structured extraction** (visible if user belongs to PM group)
-  - **RM — Red flag detection** (visible if user belongs to RM group)
+  - **RM — Risk Management** (visible if user belongs to RM group)
+  - **DQ — Data Quality** (visible if user belongs to DQ group)
   - If the user belongs to only one group, the selector is hidden and that context is applied automatically.
-- The selected context is stored on the `Analyses` record (`pipeline_context` column: `pm` / `rm` / `regulatory`).
-- The .NET service calls the correct endpoint based on the selected context (`/analyze/pm` or `/analyze/rm`).
+- The selected context is stored on the `Analyses` record (`GroupContext` column: `PM` / `RM` / `DQ` / `Regulatory`).
+- The .NET service calls the correct endpoint based on the selected context (`/analyze/pm`, `/analyze/rm`, or `/analyze/dq`).
 
 ### PM — PDF output
 
@@ -158,19 +159,28 @@ Table created: `Analyses`.
   - Disclaimer: *"This report was generated automatically by an AI system. All data should be verified against the source document."*
 - Low-confidence rows rendered with a visible warning badge
 
-### RM — Red flag detection + PDF output
+### RM — Risk Management + PDF output
 
 - POST `/analyze/rm` endpoint
 - Mistral call: `mistral-large-latest`, prompt from `prompts/RM/red_flags_v1.txt`
-- Model checks:
-  - Percentage arrays sum to 100% (±0.1% tolerance)
-  - Figures repeated across sections are consistent
-  - UCITS/AIFMD concentration thresholds derivable from the document text
+- Model checks: issuer/sector/country concentration, credit quality, leverage, liquidity, currency mismatch, mandate deviation
 - Response schema: list of `{id, severity, description, affected_fields, source_pages, detail}`
 - Severity levels: `critical` / `warning` / `info`
 - Report structure:
   - Header: document name, analysis date, group context (`RM`), user
-  - Red flags sorted critical → warning → info, source pages listed per flag
+  - Risk flags sorted critical → warning → info, source pages listed per flag
+  - Disclaimer
+
+### DQ — Data Quality + PDF output
+
+- POST `/analyze/dq` endpoint
+- Mistral call: `mistral-small-latest`, prompt from `prompts/DQ/data_quality_v1.txt`
+- Model checks: percentage arrays sum to 100% (±0.1% tolerance), figures repeated across sections with different values, other data integrity anomalies
+- Response schema: list of `{id, severity, description, affected_fields, source_pages, detail}`
+- Severity levels: `critical` / `warning` / `info`
+- Report structure:
+  - Header: document name, analysis date, group context (`DQ`), user
+  - Data quality flags sorted critical → warning → info, source pages listed per flag
   - Disclaimer
 
 ### Shared
@@ -181,7 +191,8 @@ Table created: `Analyses`.
 
 **Acceptance:**
 - PM flow: upload factsheet with PM context → PDF contains extraction tables with badges and disclaimer.
-- RM flow: upload a report with injected inconsistencies with RM context → PDF lists the red flags in the correct severity order with source page references.
+- RM flow: upload a report with injected risk issues with RM context → PDF lists risk flags in the correct severity order with source page references.
+- DQ flow: upload a report with injected data inconsistencies with DQ context → PDF lists data quality flags in the correct severity order with source page references.
 - Multi-group user: context selector is shown; single-group user: selector is hidden.
 
 ---
@@ -225,12 +236,13 @@ Table created: `Analyses`.
 
 **Deliverable:** Three fictitious fund documents validate the full pipeline end to end.
 
-Three documents for a fictitious balanced fund (mixed strategy):
+Four documents for a fictitious balanced fund (mixed strategy):
 
 | Document | Type | Injected criticalities |
 |---|---|---|
 | `fund_factsheet_Q1.pdf` | PM factsheet | Asset class percentages sum to 101.3%; ESG rating appears with two different values on different pages |
-| `fund_report_annual.pdf` | RM financial report | Country allocation doesn't match asset class allocation totals; one issuer exceeds 10% UCITS concentration limit |
+| `fund_report_annual.pdf` | RM financial report | One issuer exceeds 10% UCITS concentration limit; significant unhedged USD exposure inconsistent with the fund's currency policy |
+| `fund_report_dq.pdf` | DQ financial report | Country allocation percentages don't sum to 100%; a NAV figure appears with different values in two sections |
 | `esma_communication.pdf` | Regulatory summary | Contains references to MiFID II, AIFMD, and one deadline; one reference is implicit (should NOT appear in the output) |
 
 Each document is generated programmatically (ReportLab or similar) so criticalities are precisely controlled and reproducible.

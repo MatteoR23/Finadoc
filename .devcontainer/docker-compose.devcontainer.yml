@@ -1,0 +1,37 @@
+services:
+  # --- .NET app -----------------------------------------------------------
+  # Sostituisce l'immagine runtime con l'SDK completo e monta i sorgenti.
+  # VS Code si connette a questo container come workspace.
+  # Il processo dell'app NON parte automaticamente: è lanciato da VS Code
+  # tramite launch.json quando si preme F5.
+  app:
+    build:
+      context: .                      # .devcontainer/
+      dockerfile: Dockerfile.dotnet-dev
+    volumes:
+      - ..:/workspaces/FinLens:cached
+      - app_data:/data
+    command: sleep infinity
+    # In dev l'app non parte da sola, quindi non ha senso aspettare che ai
+    # sia healthy prima di avviare il container workspace.
+    depends_on:
+      ai:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+
+  # --- Python AI service --------------------------------------------------
+  # Costruisce dall'immagine dev (aggiunge debugpy) e monta i sorgenti live
+  # così --reload rileva ogni modifica senza ricostruire l'immagine.
+  # debugpy è in ascolto su :5678; VS Code si collega da dentro il container
+  # app tramite il nome di servizio "ai" (stessa rete Docker Compose).
+  ai:
+    build:
+      context: ../finlens_ai
+      dockerfile: Dockerfile.dev
+    volumes:
+      - ../finlens_ai:/app:cached
+    ports:
+      - "5678:5678"

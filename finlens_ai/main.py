@@ -10,6 +10,7 @@ from fastapi.responses import JSONResponse
 import config
 from models.schemas import AnalyzeRequest, AnalyzeResponse
 from pipeline import s3
+from pipeline.data_quality import run_dq_analysis
 from pipeline.extraction import run_pm_extraction
 from pipeline.ingestion import ingest_document
 from pipeline.pdf_output import generate_pdf
@@ -152,6 +153,65 @@ async def analyze_rm(request: AnalyzeRequest) -> AnalyzeResponse:
             "user_id": request.user_context.user_id,
             "language": ingested.get("language", "en"),
             "red_flags": result.model_dump()["red_flags"],
+        }
+        pdf_local = generate_pdf(pdf_data, tmp_dir)
+        with open(pdf_local, "rb") as f:
+            pdf_bytes = f.read()
+
+    try:
+        s3.upload_bytes(request.outputs_bucket, pdf_key, pdf_bytes, "application/pdf")
+    except Exception as exc:
+        logger.error("Failed to upload PDF to %s/%s: %s", request.outputs_bucket, pdf_key, exc)
+        warnings.append(f"PDF upload failed: {exc}")
+
+    return AnalyzeResponse(
+        status="ok",
+        result_s3_key=pdf_key,
+        summary=result.model_dump(),
+        warnings=warnings,
+    )
+
+
+@app.post("/analyze/dq", response_model=AnalyzeResponse)
+async def analyze_dq(request: AnalyzeRequest) -> AnalyzeResponse:
+    """DQ pipeline: data quality checks on a financial document."""
+    warnings: list[str] = []
+
+    await _report_progress(request.callback_url, "ingesting")
+    try:
+        local_path = s3.download_to_tempfile(request.documents_bucket, request.document_s3_key)
+    except Exception as exc:
+        logger.error("Failed to download %s/%s: %s", request.documents_bucket, request.document_s3_key, exc)
+        raise HTTPException(status_code=422, detail=f"Could not retrieve document from storage: {exc}")
+
+    try:
+        ingested = ingest_document(str(local_path), request.document_format)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    finally:
+        local_path.unlink(missing_ok=True)
+
+    await _report_progress(request.callback_url, "analyzing")
+    result = run_dq_analysis(ingested)
+
+    json_key = f"{request.output_s3_prefix}data_quality.json"
+    result_bytes = result.model_dump_json(indent=2).encode()
+    try:
+        s3.upload_bytes(request.outputs_bucket, json_key, result_bytes, "application/json")
+    except Exception as exc:
+        logger.error("Failed to upload JSON to %s/%s: %s", request.outputs_bucket, json_key, exc)
+        warnings.append(f"JSON upload failed: {exc}")
+
+    await _report_progress(request.callback_url, "generating")
+    pdf_key = f"{request.output_s3_prefix}report.pdf"
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        pdf_data = {
+            "pipeline": "dq",
+            "doc_name": Path(request.document_s3_key).name,
+            "analysis_date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+            "user_id": request.user_context.user_id,
+            "language": ingested.get("language", "en"),
+            "data_quality_flags": result.model_dump()["data_quality_flags"],
         }
         pdf_local = generate_pdf(pdf_data, tmp_dir)
         with open(pdf_local, "rb") as f:

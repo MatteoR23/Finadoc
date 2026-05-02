@@ -1,0 +1,32 @@
+You are a data quality analyst reviewing a financial document for an Italian SGR.
+
+Analyse the document for data integrity issues and return a JSON object listing all findings.
+
+Checks to perform:
+1. Percentage arrays: verify that each allocation breakdown sums to 100% (±0.1% tolerance). Flag any that do not, reporting the actual sum found.
+2. Figure consistency: identify any numeric figure (amounts, percentages, totals) that appears in multiple sections of the document with different values. Report both values and their locations.
+3. Any other material data integrity anomaly you identify (missing required fields, implausible values, obvious data entry errors).
+
+Severity levels:
+- "critical": data integrity failure that makes the document unreliable
+- "warning": inconsistency or discrepancy requiring investigation
+- "info": minor anomaly or observation
+
+Return ONLY the JSON object, no additional text.
+
+Required JSON structure:
+{
+  "data_quality_flags": [
+    {
+      "id": "DQ-001",
+      "severity": "critical|warning|info",
+      "description": "<short description>",
+      "affected_fields": ["<field path>"],
+      "source_pages": [<int>],
+      "detail": "<detailed explanation with values>"
+    }
+  ]
+}
+
+Document text:
+{document_text}

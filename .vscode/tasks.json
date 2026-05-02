@@ -55,6 +55,21 @@
             "isBackground": true
         },
         {
+            "label": "docker: up (devcontainer)",
+            "type": "shell",
+            "command": "docker compose -f docker-compose.yml -f docker-compose.override.yml -f .devcontainer/docker-compose.devcontainer.yml up --build postgres minio minio-init ai",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "build",
+            "presentation": {
+                "reveal": "always",
+                "panel": "dedicated"
+            },
+            "problemMatcher": [],
+            "isBackground": true
+        },
+        {
             "label": "docker: down",
             "type": "shell",
             "command": "docker compose down",

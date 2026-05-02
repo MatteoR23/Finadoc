@@ -1,0 +1,30 @@
+{
+    "name": "FinLens",
+    "dockerComposeFile": [
+        "../docker-compose.yml",
+        "../docker-compose.override.yml",
+        "docker-compose.devcontainer.yml"
+    ],
+    "service": "app",
+    "workspaceFolder": "/workspaces/FinLens",
+    "shutdownAction": "stopCompose",
+
+    // Ripristina i pacchetti .NET al primo avvio così IntelliSense è subito operativo
+    "postCreateCommand": "dotnet restore /workspaces/FinLens/FinLens.sln",
+
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "ms-dotnettools.csdevkit",
+                "ms-python.python",
+                "ms-python.debugpy"
+            ],
+            "settings": {
+                "dotnet.defaultSolution": "/workspaces/FinLens/FinLens.sln"
+            }
+        }
+    },
+
+    // Porta 8080: app Blazor — 8000: FastAPI — 5678: debugpy Python — 9000/9001: MinIO
+    "forwardPorts": [8080, 8000, 5678, 9000, 9001]
+}

@@ -163,7 +163,7 @@ else
         _userGroups = state.User
             .FindAll(ClaimTypes.Role)
             .Select(c => c.Value)
-            .Where(v => v is "PM" or "RM")
+            .Where(v => v is "PM" or "RM" or "DQ")
             .Distinct()
             .ToList();
         _groupContext = _userGroups.Count == 1 ? _userGroups[0] : string.Empty;

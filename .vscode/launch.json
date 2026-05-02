@@ -2,6 +2,40 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "name": "FinLens Web (DevContainer)",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "dotnet: build FinLens.Web",
+            "program": "${workspaceFolder}/FinLens.Web/bin/Debug/net10.0/FinLens.Web.dll",
+            "args": [],
+            "cwd": "${workspaceFolder}/FinLens.Web",
+            "env": {
+                "ASPNETCORE_ENVIRONMENT": "Development",
+                "ASPNETCORE_URLS": "http://+:8080",
+                "App__BaseUrl": "http://localhost:8080"
+            },
+            "serverReadyAction": {
+                "action": "openExternally",
+                "pattern": "\\bNow listening on:\\s+(https?://\\S+)"
+            },
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "FinLens AI (Attach DevContainer)",
+            "type": "debugpy",
+            "request": "attach",
+            "connect": {
+                "host": "ai",
+                "port": 5678
+            },
+            "pathMappings": [
+                {
+                    "localRoot": "${workspaceFolder}/finlens_ai",
+                    "remoteRoot": "/app"
+                }
+            ]
+        },
+        {
             "name": "FinLens Web (.NET)",
             "type": "coreclr",
             "request": "launch",

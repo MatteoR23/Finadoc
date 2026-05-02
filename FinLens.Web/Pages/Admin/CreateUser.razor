@@ -57,6 +57,10 @@
             <input type="checkbox" @bind="_model.IsRm" />
             Risk Manager (RM)
         </label>
+        <label class="checkbox-label">
+            <input type="checkbox" @bind="_model.IsDq" />
+            Data Quality (DQ)
+        </label>
     </fieldset>
 
     <div class="form-actions">
@@ -99,6 +103,7 @@
         var groupIds = new List<int>();
         if (_model.IsPm) groupIds.Add(1);
         if (_model.IsRm) groupIds.Add(2);
+        if (_model.IsDq) groupIds.Add(3);
 
         _submitting = true;
         try
@@ -130,5 +135,6 @@
         public bool IsAdmin { get; set; }
         public bool IsPm { get; set; }
         public bool IsRm { get; set; }
+        public bool IsDq { get; set; }
     }
 }

@@ -6,7 +6,7 @@ public class Analysis
     public Guid DocumentId { get; set; }
     public Document Document { get; set; } = null!;
 
-    /// <summary>"PM", "RM", or "Regulatory"</summary>
+    /// <summary>"PM", "RM", "DQ", or "Regulatory"</summary>
     public string GroupContext { get; set; } = string.Empty;
     /// <summary>"Pending", "Running", "Completed", "Failed"</summary>
     public string Status { get; set; } = "Pending";

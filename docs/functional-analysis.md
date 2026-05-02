@@ -270,9 +270,10 @@ Three use cases are in scope: structured extraction (PM group), red flag detecti
 |---|---|
 | **Admin** | Created on first run. Manages users, groups, and application configuration. |
 | **Portfolio Manager (PM)** | Analyzes factsheets: asset allocation, performance, ESG, transactions. |
-| **Risk Manager (RM)** | Detects anomalies: flags numerical inconsistencies, threshold breaches, and deviations vs. prior period. |
+| **Risk Manager (RM)** | Detects risk anomalies: concentration, leverage, credit quality, liquidity, currency mismatch, mandate deviation. |
+| **Data Quality (DQ)** | Checks data integrity: percentage sums, figure consistency across sections, and other data anomalies. |
 
-Users can belong to both groups simultaneously. Each group has a distinct AI context: its own system prompts, knowledge base, and extraction templates. No fine-tuning in the POC.
+Users can belong to multiple groups simultaneously. Each group has a distinct AI context: its own system prompts, knowledge base, and extraction templates. No fine-tuning in the POC.
 
 ### 3.2 Features
 
@@ -305,15 +306,27 @@ Targets factsheets and periodic reports. Extracts:
 
 All fields are normalized into a shared internal data model.
 
-**RM — Red flag detection**
+**RM — Risk Management**
 
 Targets fund and target-company financial reports. Flags:
-- Percentage breakdowns that don't sum to 100% (tolerance: ±0.1%)
-- Values that appear inconsistently across sections of the same document
-- Breaches of UCITS/AIFMD concentration or leverage thresholds, where derivable from the document text
-- Material deviations vs. the prior period — requires two documents; treated as optional in the POC
+- Issuer concentration exceeding 10% (UCITS Art. 52)
+- Sector or country concentration exceeding 25% where inconsistent with the fund's mandate
+- Material exposure to sub-investment-grade instruments above stated thresholds
+- Leverage breaching AIFMD/UCITS limits derivable from the document
+- Liquidity risk: illiquid assets exceeding the fund's liquidity profile
+- Significant unhedged foreign currency exposure inconsistent with the fund's currency policy
+- Material deviation from declared benchmark, target allocation, or investment mandate
 
-Each flag carries a severity (info / warning / critical) and a source page reference.
+Each flag carries a severity (info / warning / critical) and a source page reference. Uses `mistral-large-latest`.
+
+**DQ — Data Quality**
+
+Targets any financial document. Flags:
+- Percentage breakdowns that don't sum to 100% (tolerance: ±0.1%)
+- Numeric figures appearing with different values in multiple sections of the same document
+- Other material data integrity anomalies (missing fields, implausible values, data entry errors)
+
+Each flag carries a severity (info / warning / critical) and a source page reference. Uses `mistral-small-latest`.
 
 **Regulatory summary**
 
@@ -327,7 +340,8 @@ For communications from Consob, Bank of Italy, or ESMA. Produces:
 Every analysis produces a multi-page PDF in English. Free-form layout in the POC (no corporate template). The PDF contains:
 - Header: document name, analysis date, group context, user
 - Extraction tables with source page and confidence badge on each row (PM)
-- Red flags sorted by severity, critical first (RM)
+- Risk flags sorted by severity, critical first (RM)
+- Data quality flags sorted by severity, critical first (DQ)
 - Executive summary, regulatory references, deadlines table (regulatory)
 - Disclaimer: *"This report was generated automatically by an AI system. All data should be verified against the source document."*
 
@@ -360,8 +374,14 @@ Before any text is sent to Mistral, the pipeline detects and replaces sensitive 
 **RM analysis on a fund or target-company report**
 1. User logs in, selects RM context.
 2. Uploads the financial report.
-3. Pipeline runs red flag analysis.
-4. PDF output lists anomalies sorted by severity, each with source reference.
+3. Pipeline runs risk management analysis.
+4. PDF output lists risk flags sorted by severity, each with source reference.
+
+**DQ analysis on a financial document**
+1. User logs in, selects DQ context.
+2. Uploads the document.
+3. Pipeline runs data quality checks.
+4. PDF output lists data integrity issues sorted by severity, each with source reference.
 
 **Regulatory document summary**
 1. User uploads a regulatory communication.

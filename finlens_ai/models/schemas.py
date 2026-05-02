@@ -133,6 +133,21 @@ class RMResult(BaseModel):
     red_flags: list[RedFlag] = []
 
 
+# --- DQ data quality ---
+
+class DQFlag(BaseModel):
+    id: str
+    severity: str  # "critical" | "warning" | "info"
+    description: str
+    affected_fields: list[str]
+    source_pages: list[int]
+    detail: str
+
+
+class DQResult(BaseModel):
+    data_quality_flags: list[DQFlag] = []
+
+
 # --- Regulatory summary ---
 
 class RequiredAction(BaseModel):

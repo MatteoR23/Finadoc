@@ -1,6 +1,6 @@
 namespace FinLens.Web.Models;
 
-/// <summary>Valid group names: "PM", "RM".</summary>
+/// <summary>Valid group names: "PM", "RM", "DQ".</summary>
 public class Group
 {
     public int Id { get; set; }
