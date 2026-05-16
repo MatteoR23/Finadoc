@@ -8,14 +8,28 @@ namespace FinLens.Web.Services;
 
 public class AnalysisService(AppDbContext db, IBackgroundJobClient jobs)
 {
-    public async Task<Analysis> StartAnalysisAsync(Guid documentId, string groupContext, Guid userId)
+    public async Task<Analysis> StartAnalysisAsync(
+        Guid documentId,
+        string groupContext,
+        Guid userId,
+        string mode = "Standard",
+        string? goal = null)
     {
         var doc = await db.Documents.FindAsync(documentId)
             ?? throw new InvalidOperationException("Document not found.");
 
+        mode = string.Equals(mode, "Agentic", StringComparison.OrdinalIgnoreCase)
+            ? "Agentic"
+            : "Standard";
+
+        if (mode == "Standard" && string.IsNullOrWhiteSpace(groupContext))
+            throw new InvalidOperationException("A group context is required for standard analyses.");
+
         var analysis = new Analysis
         {
             DocumentId = doc.Id,
+            Mode = mode,
+            Goal = string.IsNullOrWhiteSpace(goal) ? null : goal.Trim(),
             GroupContext = groupContext,
             Status = "Queued",
             ExpiresAt = DateTime.UtcNow.AddDays(90),
@@ -23,7 +37,7 @@ public class AnalysisService(AppDbContext db, IBackgroundJobClient jobs)
         db.Analyses.Add(analysis);
         await db.SaveChangesAsync();
 
-        jobs.Enqueue<AnalysisJob>(j => j.RunAsync(analysis.Id, userId, groupContext));
+        jobs.Enqueue<AnalysisJob>(j => j.RunAsync(analysis.Id, userId));
         return analysis;
     }
 

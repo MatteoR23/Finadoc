@@ -18,7 +18,7 @@ public class AnalysisJob(
     IConfiguration config,
     ILogger<AnalysisJob> logger)
 {
-    public async Task RunAsync(Guid analysisId, Guid userId, string groupContext)
+    public async Task RunAsync(Guid analysisId, Guid userId)
     {
         var analysis = await db.Analyses
             .Include(a => a.Document)
@@ -37,10 +37,16 @@ public class AnalysisJob(
 
         try
         {
+            var groupContext = analysis.GroupContext;
             var outputsBucket = config["Storage:OutputsBucket"] ?? "finlens-outputs";
             var documentsBucket = config["Storage:DocumentsBucket"] ?? "finlens-documents";
             var appBaseUrl = config["App:BaseUrl"] ?? "http://localhost:8080";
             var callbackUrl = $"{appBaseUrl}/internal/analysis/{analysisId}/progress";
+            var mode = string.Equals(analysis.Mode, "Agentic", StringComparison.OrdinalIgnoreCase)
+                ? "Agentic"
+                : "Standard";
+            var allowedContexts = BuildAllowedContexts(groupContext);
+            var userGroups = mode == "Agentic" ? allowedContexts : [groupContext];
 
             var requestBody = new AiAnalyzeRequest(
                 DocumentS3Key: analysis.Document.StorageKey,
@@ -49,12 +55,21 @@ public class AnalysisJob(
                 Language: analysis.Document.Language,
                 OutputsBucket: outputsBucket,
                 OutputS3Prefix: $"analyses/{analysisId}/",
-                UserContext: new AiUserContext(userId.ToString(), [groupContext]),
+                UserContext: new AiUserContext(userId.ToString(), userGroups),
                 AnalysisId: analysisId,
-                CallbackUrl: callbackUrl);
+                CallbackUrl: callbackUrl,
+                Agentic: mode == "Agentic"
+                    ? new AiAgenticOptions(
+                        Goal: analysis.Goal,
+                        AllowedContexts: allowedContexts,
+                        RequestedOutput: "pdf")
+                    : null);
 
             var client = httpClientFactory.CreateClient("AiService");
-            var response = await client.PostAsJsonAsync($"/analyze/{groupContext.ToLower()}", requestBody);
+            var targetPath = mode == "Agentic"
+                ? "/analyze/agentic"
+                : $"/analyze/{groupContext.ToLower()}";
+            var response = await client.PostAsJsonAsync(targetPath, requestBody);
 
             if (!response.IsSuccessStatusCode)
             {
@@ -68,6 +83,10 @@ public class AnalysisJob(
             analysis.Status = "Completed";
             analysis.Step = null;
             analysis.PdfPath = result?.ResultS3Key;
+            analysis.ResultS3Key = result?.ResultS3Key;
+            analysis.ReportS3Key = result?.ReportS3Key ?? result?.ResultS3Key;
+            analysis.PlanS3Key = result?.Summary?.PlanS3Key;
+            analysis.TraceS3Key = result?.Summary?.TraceS3Key;
             analysis.CompletedAt = DateTime.UtcNow;
             await db.SaveChangesAsync();
 
@@ -102,6 +121,22 @@ public class AnalysisJob(
 
     private static string EscapeJson(string v) =>
         v.Replace("\\", "\\\\").Replace("\"", "\\\"").Replace("\n", "\\n");
+
+    private static string[] BuildAllowedContexts(string groupContext)
+    {
+        var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "Regulatory",
+        };
+
+        if (!string.IsNullOrWhiteSpace(groupContext))
+        {
+            foreach (var entry in groupContext.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                set.Add(entry);
+        }
+
+        return set.ToArray();
+    }
 }
 
 internal record AiAnalyzeRequest(
@@ -113,13 +148,25 @@ internal record AiAnalyzeRequest(
     [property: JsonPropertyName("output_s3_prefix")] string OutputS3Prefix,
     [property: JsonPropertyName("user_context")] AiUserContext UserContext,
     [property: JsonPropertyName("analysis_id")] Guid AnalysisId,
-    [property: JsonPropertyName("callback_url")] string CallbackUrl);
+    [property: JsonPropertyName("callback_url")] string CallbackUrl,
+    [property: JsonPropertyName("agentic")] AiAgenticOptions? Agentic);
 
 internal record AiUserContext(
     [property: JsonPropertyName("user_id")] string UserId,
     [property: JsonPropertyName("groups")] string[] Groups);
 
+internal record AiAgenticOptions(
+    [property: JsonPropertyName("goal")] string? Goal,
+    [property: JsonPropertyName("allowed_contexts")] string[] AllowedContexts,
+    [property: JsonPropertyName("requested_output")] string RequestedOutput);
+
 internal record AiAnalyzeResponse(
     [property: JsonPropertyName("status")] string Status,
     [property: JsonPropertyName("result_s3_key")] string? ResultS3Key,
+    [property: JsonPropertyName("report_s3_key")] string? ReportS3Key,
+    [property: JsonPropertyName("summary")] AiAgenticSummary? Summary,
     [property: JsonPropertyName("warnings")] List<string> Warnings);
+
+internal record AiAgenticSummary(
+    [property: JsonPropertyName("plan_s3_key")] string? PlanS3Key,
+    [property: JsonPropertyName("trace_s3_key")] string? TraceS3Key);

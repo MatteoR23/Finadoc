@@ -39,10 +39,40 @@ services:
       - S3_ENDPOINT_URL=http://minio:9000
       - S3_ACCESS_KEY=${MINIO_ROOT_USER:-finlens}
       - S3_SECRET_KEY=${MINIO_ROOT_PASSWORD:-finlens_secret}
+      - MCP_BASE_URL=http://mcp:9000
+      - MCP_CLIENT_ID=${MCP_CLIENT_ID}
+      - MCP_SECRET_ID=${MCP_SECRET_ID}
     volumes:
       - finlens_data:/data
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    depends_on:
+      mcp:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+
+  mcp:
+    build: ./finlens_ai
+    command: ["uvicorn", "mcp_server:app", "--host", "0.0.0.0", "--port", "9000"]
+    expose:
+      - "9000"
+    environment:
+      - INTERNAL_API_KEY=${INTERNAL_API_KEY}
+      - MISTRAL_API_KEY=${MISTRAL_API_KEY}
+      - S3_ENDPOINT_URL=http://minio:9000
+      - S3_ACCESS_KEY=${MINIO_ROOT_USER:-finlens}
+      - S3_SECRET_KEY=${MINIO_ROOT_PASSWORD:-finlens_secret}
+      - MCP_CLIENT_ID=${MCP_CLIENT_ID}
+      - MCP_SECRET_ID=${MCP_SECRET_ID}
+    volumes:
+      - finlens_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/health"]
       interval: 10s
       timeout: 5s
       retries: 5

@@ -73,7 +73,7 @@ else
                         <td>@analysis.StartedAt.ToString("yyyy-MM-dd HH:mm")</td>
                         <td><span class="badge badge-status-@analysis.Status.ToLower()">@analysis.Status</span></td>
                         <td class="action-cell">
-                            @if (analysis.Status == "Completed" && analysis.PdfPath is not null)
+                            @if (analysis.Status == "Completed" && (analysis.ReportS3Key is not null || analysis.PdfPath is not null))
                             {
                                 <a href="/api/analysis/@analysis.Id/download" class="btn btn-success btn-sm">Download PDF</a>
                             }

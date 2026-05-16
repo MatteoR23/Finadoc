@@ -83,6 +83,11 @@ _I18N: dict[str, dict[str, str]] = {
         "no_red_flags": "No red flags detected.",
         "data_quality": "Data Quality Checks",
         "no_dq_flags": "No data quality issues detected.",
+        "regulatory_summary": "Regulatory Summary",
+        "regulatory_references": "Regulatory References",
+        "required_actions": "Required Actions",
+        "action_description": "Description",
+        "action_deadline": "Deadline",
         "pages_label": "Pages:",
         "fields_label": "Fields:",
         "disclaimer": "This report was generated automatically by an AI system. All data should be verified against the source document.",
@@ -119,6 +124,11 @@ _I18N: dict[str, dict[str, str]] = {
         "no_red_flags": "Nessuna segnalazione rilevata.",
         "data_quality": "Controlli di Qualità dei Dati",
         "no_dq_flags": "Nessun problema di qualità dei dati rilevato.",
+        "regulatory_summary": "Sintesi Regolamentare",
+        "regulatory_references": "Riferimenti Regolamentari",
+        "required_actions": "Azioni Richieste",
+        "action_description": "Descrizione",
+        "action_deadline": "Scadenza",
         "pages_label": "Pagine:",
         "fields_label": "Campi:",
         "disclaimer": "Questo report è stato generato automaticamente da un sistema di IA. Tutti i dati devono essere verificati rispetto al documento originale.",
@@ -408,6 +418,55 @@ def _build_disclaimer(lang: str = "en") -> list:
     ]
 
 
+def _build_regulatory_sections(summary: dict, lang: str = "en") -> list:
+    flowables: list = []
+    flowables.append(Paragraph(_t(lang, "regulatory_summary"), _STYLE_HEADING))
+    flowables.append(Paragraph(summary.get("executive_summary", "—"), _STYLE_BODY))
+    flowables.append(Spacer(1, 8))
+
+    refs = summary.get("regulatory_references", [])
+    flowables.append(Paragraph(_t(lang, "regulatory_references"), _STYLE_HEADING))
+    if refs:
+        rows = [[Paragraph(ref, _STYLE_BODY)] for ref in refs]
+        t = Table(rows, colWidths=[455])
+        t.setStyle(TableStyle([
+            ("GRID", (0, 0), (-1, -1), 0.25, _BORDER),
+            ("TOPPADDING", (0, 0), (-1, -1), 4),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+        ]))
+        flowables.append(t)
+    else:
+        flowables.append(Paragraph("—", _STYLE_BODY))
+    flowables.append(Spacer(1, 8))
+
+    actions = summary.get("required_actions", [])
+    flowables.append(Paragraph(_t(lang, "required_actions"), _STYLE_HEADING))
+    if actions:
+        rows = [[_t(lang, "action_description"), _t(lang, "action_deadline"), _t(lang, "page_short")]]
+        for action in actions:
+            rows.append([
+                Paragraph(action.get("description", "—"), _STYLE_BODY),
+                action.get("deadline") or "—",
+                str(action.get("source_page", "—")),
+            ])
+        t = Table(rows, colWidths=[315, 90, 50])
+        t.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), _HEADER_BG),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+            ("FONTSIZE", (0, 0), (-1, -1), 9),
+            ("GRID", (0, 0), (-1, -1), 0.25, _BORDER),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("TOPPADDING", (0, 0), (-1, -1), 4),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+        ]))
+        flowables.append(t)
+    else:
+        flowables.append(Paragraph("—", _STYLE_BODY))
+    flowables.append(Spacer(1, 8))
+    return flowables
+
+
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
@@ -416,8 +475,8 @@ def generate_pdf(data: dict[str, Any], output_path: str) -> str:
     """Generate a PDF report and write it to output_path/report.pdf.
 
     Args:
-        data: Dict with keys: pipeline ("pm"|"rm"), doc_name, analysis_date,
-              user_id, language ("en"|"it"), and either extraction (PM) or red_flags (RM).
+        data: Dict with keys: pipeline ("pm"|"rm"|"dq"|"regulatory"), doc_name, analysis_date,
+              user_id, language ("en"|"it"), and pipeline-specific payload.
         output_path: Directory where report.pdf will be written.
 
     Returns:
@@ -446,6 +505,8 @@ def generate_pdf(data: dict[str, Any], output_path: str) -> str:
         flowables += _build_rm_sections(data.get("red_flags", []), lang)
     elif pipeline == "dq":
         flowables += _build_dq_sections(data.get("data_quality_flags", []), lang)
+    elif pipeline == "regulatory":
+        flowables += _build_regulatory_sections(data.get("regulatory", {}), lang)
 
     flowables += _build_disclaimer(lang)
     doc.build(flowables)

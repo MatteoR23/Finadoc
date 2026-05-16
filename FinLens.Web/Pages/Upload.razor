@@ -24,6 +24,26 @@
                disabled="@_uploading" />
 </div>
 
+<div class="context-selector mt-2">
+    <span class="context-selector-label">Mode:</span>
+    <label class="context-selector-option">
+        <input type="radio"
+               name="analysisMode"
+               value="Standard"
+               checked="@(_analysisMode == "Standard")"
+               @onchange='@(() => _analysisMode = "Standard")' />
+        Standard
+    </label>
+    <label class="context-selector-option">
+        <input type="radio"
+               name="analysisMode"
+               value="Agentic"
+               checked="@(_analysisMode == "Agentic")"
+               @onchange='@(() => _analysisMode = "Agentic")' />
+        Agentic
+    </label>
+</div>
+
 @if (_userGroups.Count > 1)
 {
     <div class="context-selector mt-2">
@@ -39,6 +59,18 @@
                 @group
             </label>
         }
+    </div>
+}
+
+@if (_analysisMode == "Agentic")
+{
+    <div class="mt-2">
+        <label for="agenticGoal" class="context-selector-label">Goal (optional)</label>
+        <textarea id="agenticGoal"
+                  class="form-control"
+                  maxlength="500"
+                  rows="2"
+                  @bind="_agenticGoal"></textarea>
     </div>
 }
 
@@ -112,7 +144,7 @@ else
                         }
                         else
                         {
-                            @if (!isRunning && string.IsNullOrEmpty(_groupContext))
+                            @if (!isRunning && _analysisMode == "Standard" && string.IsNullOrEmpty(_groupContext))
                             {
                                 <span class="text-muted small me-2">No group assigned</span>
                             }
@@ -147,6 +179,8 @@ else
     private Guid _userId;
     private List<string> _userGroups = [];
     private string _groupContext = string.Empty;
+    private string _analysisMode = "Standard";
+    private string _agenticGoal = string.Empty;
     private List<Document>? _docs;
     private Dictionary<Guid, Analysis?> _analyses = [];
     private bool _uploading;
@@ -206,7 +240,13 @@ else
         StateHasChanged();
         try
         {
-            await AnalysisSvc.StartAnalysisAsync(docId, _groupContext, _userId);
+            var context = ResolveContextForStart();
+            await AnalysisSvc.StartAnalysisAsync(
+                docId,
+                context,
+                _userId,
+                _analysisMode,
+                _analysisMode == "Agentic" ? _agenticGoal : null);
             await RefreshAnalysesAsync();
         }
         catch (Exception ex)
@@ -259,10 +299,28 @@ else
     private static string StepLabel(string step) => step switch
     {
         "ingesting"  => "Reading document",
+        "masking"    => "Masking sensitive data",
         "analyzing"  => "Running AI analysis",
+        "planning"   => "Planning tool execution",
+        "validating_plan" => "Validating execution plan",
         "generating" => "Generating PDF",
+        _ when step.StartsWith("executing:", StringComparison.OrdinalIgnoreCase) =>
+            $"Executing {step["executing:".Length..]}",
         _            => step,
     };
+
+    private string ResolveContextForStart()
+    {
+        if (_analysisMode == "Agentic")
+        {
+            var contexts = _userGroups.Count > 0
+                ? _userGroups
+                : [string.IsNullOrWhiteSpace(_groupContext) ? "PM" : _groupContext];
+            return string.Join(",", contexts.Distinct(StringComparer.OrdinalIgnoreCase));
+        }
+
+        return _groupContext;
+    }
 
     public ValueTask DisposeAsync()
     {

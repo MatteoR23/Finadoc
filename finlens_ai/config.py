@@ -23,3 +23,8 @@ S3_ACCESS_KEY: str = os.environ.get("S3_ACCESS_KEY", "finlens")
 S3_SECRET_KEY: str = os.environ.get("S3_SECRET_KEY", "finlens_secret")
 S3_DOCUMENTS_BUCKET: str = os.environ.get("S3_DOCUMENTS_BUCKET", "finlens-documents")
 S3_OUTPUTS_BUCKET: str = os.environ.get("S3_OUTPUTS_BUCKET", "finlens-outputs")
+
+# Internal MCP service
+MCP_BASE_URL: str = os.environ.get("MCP_BASE_URL", "http://localhost:9000")
+MCP_CLIENT_ID: str = os.environ.get("MCP_CLIENT_ID", "")
+MCP_SECRET_ID: str = os.environ.get("MCP_SECRET_ID", "")

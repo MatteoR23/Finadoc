@@ -25,6 +25,7 @@ else
             <tr>
                 <th>Document</th>
                 <th>Pipeline</th>
+                <th>Mode</th>
                 <th>Started</th>
                 <th>Status</th>
                 <th></th>
@@ -36,10 +37,11 @@ else
                 <tr>
                     <td>@analysis.Document.OriginalFileName</td>
                     <td><span class="badge badge-pipeline-@analysis.GroupContext.ToLower()">@analysis.GroupContext</span></td>
+                    <td>@analysis.Mode</td>
                     <td>@analysis.StartedAt.ToString("yyyy-MM-dd HH:mm")</td>
                     <td><span class="badge badge-status-@analysis.Status.ToLower()">@analysis.Status</span></td>
                     <td class="action-cell">
-                        @if (analysis.Status == "Completed" && analysis.PdfPath is not null)
+                        @if (analysis.Status == "Completed" && (analysis.ReportS3Key is not null || analysis.PdfPath is not null))
                         {
                             <a href="/api/analysis/@analysis.Id/download"
                                class="btn btn-success btn-sm">Download PDF</a>

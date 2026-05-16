@@ -198,10 +198,11 @@ app.MapGet("/api/analysis/{id:guid}/download", async (
         .FirstOrDefaultAsync(a => a.Id == id && a.Document.UserId == userId);
 
     if (analysis is null) return Results.NotFound();
-    if (analysis.PdfPath is null || analysis.Status != "Completed")
+    var reportKey = analysis.ReportS3Key ?? analysis.PdfPath;
+    if (reportKey is null || analysis.Status != "Completed")
         return Results.BadRequest(new { error = "Report not ready." });
 
-    var stream = await storage.DownloadAsync(storageSettings.OutputsBucket, analysis.PdfPath);
+    var stream = await storage.DownloadAsync(storageSettings.OutputsBucket, reportKey);
     await audit.LogAsync("pdf_download", userId, "Analysis", id.ToString());
 
     var fileName = $"finlens-{analysis.GroupContext.ToLower()}-report.pdf";

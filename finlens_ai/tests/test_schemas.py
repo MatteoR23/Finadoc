@@ -195,8 +195,7 @@ def test_rm_result_with_flags() -> None:
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
-# PM, RM, and DQ are implemented; they return 422 when S3 is unreachable.
-# Regulatory is not yet implemented (P6) and returns 501.
+# PM, RM, DQ, and Regulatory are implemented; they return 422 when S3 is unreachable.
 
 def test_analyze_rm_returns_422_when_s3_unavailable(client) -> None:
     response = client.post("/analyze/rm", json=_VALID_REQUEST, headers={"X-Internal-Api-Key": "test-key"})
@@ -208,6 +207,6 @@ def test_analyze_dq_returns_422_when_s3_unavailable(client) -> None:
     assert response.status_code == 422
 
 
-def test_analyze_regulatory_returns_501(client) -> None:
+def test_analyze_regulatory_returns_422_when_s3_unavailable(client) -> None:
     response = client.post("/analyze/regulatory", json=_VALID_REQUEST, headers={"X-Internal-Api-Key": "test-key"})
-    assert response.status_code == 501
+    assert response.status_code == 422

@@ -37,11 +37,27 @@ namespace FinLens.Web.Migrations
                     b.Property<DateTime>("ExpiresAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("Goal")
+                        .HasColumnType("text");
+
                     b.Property<string>("GroupContext")
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<string>("Mode")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("PlanS3Key")
+                        .HasColumnType("text");
+
                     b.Property<string>("PdfPath")
+                        .HasColumnType("text");
+
+                    b.Property<string>("ReportS3Key")
+                        .HasColumnType("text");
+
+                    b.Property<string>("ResultS3Key")
                         .HasColumnType("text");
 
                     b.Property<DateTime>("StartedAt")
@@ -52,6 +68,9 @@ namespace FinLens.Web.Migrations
                         .HasColumnType("text");
 
                     b.Property<string>("Step")
+                        .HasColumnType("text");
+
+                    b.Property<string>("TraceS3Key")
                         .HasColumnType("text");
 
                     b.HasKey("Id");

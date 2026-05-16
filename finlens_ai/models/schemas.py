@@ -29,6 +29,7 @@ class AnalyzeRequest(BaseModel):
     user_context: UserContext
     analysis_id: str = ""
     callback_url: str = ""
+    agentic: "AgenticOptions | None" = None
 
     @field_validator("document_s3_key")
     @classmethod
@@ -68,6 +69,25 @@ class AnalyzeResponse(BaseModel):
     result_s3_key: str
     summary: dict[str, Any]
     warnings: list[str]
+    report_s3_key: str | None = None
+
+
+class AgenticOptions(BaseModel):
+    goal: str | None = None
+    allowed_contexts: list[str] = []
+    requested_output: str = "pdf"
+
+    @field_validator("goal")
+    @classmethod
+    def validate_goal(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        trimmed = v.strip()
+        if not trimmed:
+            return None
+        if len(trimmed) > 500:
+            raise ValueError("goal must be <= 500 characters")
+        return trimmed
 
 
 # --- PM extraction ---

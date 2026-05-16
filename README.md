@@ -91,9 +91,34 @@ Conversational Q&A, automatic classification, semantic search, document comparis
 
 ```bash
 cp .env.example .env
-# Fill in MISTRAL_API_KEY and INTERNAL_API_KEY in .env
+# Fill in MISTRAL_API_KEY, INTERNAL_API_KEY, MCP_CLIENT_ID and MCP_SECRET_ID in .env
 docker compose up --build
 # → http://localhost:8080 (first run prompts for admin password)
+```
+
+### Environment variables
+
+The Docker setup reads secrets from `.env`, which is not committed. Generate both internal secrets locally:
+
+```bash
+openssl rand -hex 32
+```
+
+Required values:
+
+```env
+MISTRAL_API_KEY=<your Mistral API key>
+INTERNAL_API_KEY=<openssl rand -hex 32>
+MCP_CLIENT_ID=finlens-agentic
+MCP_SECRET_ID=<openssl rand -hex 32>
+```
+
+`MCP_CLIENT_ID` and `MCP_SECRET_ID` are used for service-to-service authentication between the AI orchestrator and the internal MCP server. The same values are injected into both services by `docker-compose.yml`, so define them once in `.env`.
+
+Do not commit `.env`. After changing `MCP_SECRET_ID`, restart the stack:
+
+```bash
+docker compose up --build
 ```
 
 ### Running the .NET app locally (hot-reload / debug)
