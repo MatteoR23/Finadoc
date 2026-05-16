@@ -324,7 +324,7 @@ Session: HttpOnly, Secure cookie, 8-hour sliding expiration.
 | **Theme** | Dark |
 | **Style** | Enterprise / financial dashboard (Bloomberg-style) |
 | **CSS framework** | Bootstrap 5 (loaded via CDN in `_Layout.cshtml`) |
-| **Scope** | Full design system — applies to all phases P2–P10 |
+| **Scope** | Full design system — applies to all phases P2–P9 |
 
 The visual language should feel professional and data-dense: dark backgrounds, muted borders, high-contrast text, tabular data as the primary UI pattern. No decorative elements, no consumer-grade softness.
 
@@ -434,9 +434,9 @@ print(response.choices[0].message.content)
 | P2 | Auth — login form, admin setup on first run, user/group CRUD |
 | P3 | Upload — file storage, DB record, audit event |
 | P4 | PM pipeline — PDF/Excel ingestion → masking → Mistral call → extraction JSON |
-| P5 | PDF output — ReportLab report from extraction JSON, downloadable from the UI |
-| P6 | RM pipeline — red flag analysis, severity classification, flags added to PDF |
-| P7 | Regulatory summary — summary endpoint, output added to PDF |
-| P8 | Retention & audit — 90-day cleanup worker, full event logging |
-| P9 | Test documents — 3 fictitious fund documents with injected criticalities |
-| P10 | Polish — Excel ingestion, confidence badges, cross-source check, disclaimer |
+| P4bis | Agentic mode foundation — bounded planner, policy gate, authenticated MCP server, tool registry, sanitized plan/trace artifacts |
+| P5 | Unified PM/RM/DQ pipeline and PDF output — ReportLab reports, context selector, agentic tool registration |
+| P6 | Regulatory summary — summary endpoint, output added to PDF, regulatory tool registration |
+| P7 | Retention & audit — 90-day cleanup worker, full event logging including agentic artifacts |
+| P8 | Test documents — fictitious fund documents with injected criticalities |
+| P9 | Polish — Excel ingestion, confidence badges, cross-source check, disclaimer |

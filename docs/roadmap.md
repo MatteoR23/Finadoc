@@ -6,7 +6,7 @@
 
 ## Overview
 
-Ten phases, each with a clear deliverable and acceptance criteria. Each phase builds on the previous one — there are no parallel tracks in a one-person project. The goal is a working end-to-end system by P10, validated against three fictitious fund documents with injected criticalities.
+Sequential phases, each with a clear deliverable and acceptance criteria. Each phase builds on the previous one — there are no parallel tracks in a one-person project. The goal is a working end-to-end system by the final polish phase, validated against fictitious fund documents with injected criticalities.
 
 ---
 
@@ -133,6 +133,38 @@ Table created: `Analyses`.
 
 ---
 
+## Phase 4bis — Agentic mode foundation
+
+**Deliverable:** FinLens gains a bounded agentic orchestration layer that can plan and execute approved internal analysis tools without expanding the security perimeter.
+
+- New documentation under `docs/agentic_mode/` defining the agentic functional analysis, architecture, implementation plan, data model changes, API contract, security rules, testing strategy, and acceptance criteria
+- Python `/analyze/agentic` endpoint scaffold:
+  - reuses the existing request contract plus optional agentic settings (`goal`, allowed contexts, requested output)
+  - ingests the document once
+  - masks with Presidio before planner or tool LLM calls
+  - calls Mistral in JSON mode to produce an `AgentPlan`
+  - validates the plan with Pydantic schemas and a deterministic policy gate
+- Tool registry with typed allowlisted tools; P4bis registers `pm_extract`, later phases register RM, DQ, regulatory summary, consistency checks, and PDF generation
+- Internal MCP server exposes approved tools only, reachable only from the AI service on the Docker network
+- MCP service-to-service authentication uses `client_id` and `secret_id` headers loaded from environment variables; credentials are never stored in plan, trace, audit, logs, or output artifacts
+- Policy gate rejects unknown tools, unauthorized contexts, invalid dependency graphs, external URLs, arbitrary file paths, shell commands, and any request for raw unmasked text
+- Sanitized artifacts stored in MinIO under `analyses/<analysis-uuid>/`:
+  - `plan.json`
+  - `trace.json`
+  - `agentic_result.json`
+  - `pm_extraction.json`
+- .NET additions:
+  - analysis mode (`Standard` / `Agentic`)
+  - optional bounded goal field
+  - artifact keys for result, plan, trace, and future PDF report
+  - agentic progress steps (`planning`, `validating_plan`, `executing:<tool>`)
+  - audit events for plan creation/rejection and tool execution
+- Agentic mode remains optional; the existing deterministic context selector stays available
+
+**Acceptance:** Upload a PM factsheet in Agentic mode → the planner selects `pm_extract`, the policy gate approves it, extraction runs through the authenticated MCP server, plan/trace/result artifacts are stored, the UI shows agentic progress, audit events are written, invalid MCP credentials fail closed, and no plan, trace, audit detail, or debug artifact contains unmasked text, credentials, prompt bodies, raw LLM responses, or Presidio placeholder mappings.
+
+---
+
 ## Phase 5 — Unified analysis pipeline (PM + RM)
 
 **Deliverable:** Both PM and RM pipelines are complete end-to-end; the upload UI lets the user choose the analysis context before submitting.
@@ -185,15 +217,17 @@ Table created: `Analyses`.
 
 ### Shared
 
-- PDF stored at `/data/outputs/<analysis-uuid>/report.pdf`
+- PDF stored in the outputs bucket at `analyses/<analysis-uuid>/report.pdf`
 - Download button in the Blazor UI; audit event logged on download
 - .NET stores result; audit event logged
+- Agentic mode registers `rm_red_flags`, `dq_check`, and `generate_report` as additional approved tools, while Standard mode continues to call the selected endpoint directly
 
 **Acceptance:**
 - PM flow: upload factsheet with PM context → PDF contains extraction tables with badges and disclaimer.
 - RM flow: upload a report with injected risk issues with RM context → PDF lists risk flags in the correct severity order with source page references.
 - DQ flow: upload a report with injected data inconsistencies with DQ context → PDF lists data quality flags in the correct severity order with source page references.
 - Multi-group user: context selector is shown; single-group user: selector is hidden.
+- Agentic flow: upload a document as a multi-group user → only authorized tools are selectable by the planner and the generated trace explains which workflows ran.
 
 ---
 
@@ -213,6 +247,7 @@ Table created: `Analyses`.
   - Deadlines table (description, deadline date, source page)
   - Disclaimer
 - .NET stores result; audit event logged
+- Agentic mode registers `regulatory_summary` as an approved tool available to authenticated users
 
 **Acceptance:** Upload a test regulatory PDF → PDF report contains a correct executive summary, references only provisions explicitly cited in the text, and lists any deadlines found.
 
@@ -222,7 +257,7 @@ Table created: `Analyses`.
 
 **Deliverable:** 90-day cleanup runs automatically; full audit trail is in place.
 
-- `RetentionCleanupWorker` (IHostedService): runs daily, deletes `Documents` and `Analyses` rows where `ExpiresAt <= now`, then removes the corresponding files from disk
+- `RetentionCleanupWorker` (IHostedService): runs daily, deletes `Documents` and `Analyses` rows where `ExpiresAt <= now`, then removes the corresponding files/objects from storage, including agentic plan and trace artifacts
 - Audit events complete: login, upload, analysis generated, PDF downloaded, document/analysis deleted, admin actions (user create/deactivate, group assignment)
 - Each audit record: `timestamp`, `user_id`, `action`, `target_type`, `target_id`, `outcome`, `details`
 - Audit log is append-only — no delete endpoint; the cleanup worker removes records older than 90 days
