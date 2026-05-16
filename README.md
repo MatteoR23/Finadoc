@@ -121,6 +121,71 @@ Do not commit `.env`. After changing `MCP_SECRET_ID`, restart the stack:
 docker compose up --build
 ```
 
+### Encrypted environment file
+
+FinLens also supports bootstrapping `.env` from an encrypted file committed to the repository.
+
+The committed files are:
+
+```text
+.env.enc
+.sops.yaml
+scripts/bootstrap-env.sh
+```
+
+`.env.enc` is encrypted with `sops` and `age`. It is safe to commit because it does not contain readable secret values. Only maintainers or contributors who have an authorized private `age` key can decrypt it.
+
+Install the tools:
+
+```bash
+# Arch Linux
+sudo pacman -S sops age
+
+# macOS
+brew install sops age
+```
+
+After cloning the repository, create `.env` with:
+
+```bash
+./scripts/bootstrap-env.sh
+```
+
+The script decrypts `.env.enc` into `.env` and sets local file permissions to `600`.
+
+Requirements:
+
+- `sops` installed and available in `PATH`
+- the private `age` key available at `~/.config/sops/age/keys.txt`
+
+Maintainer workflow for updating secrets:
+
+```bash
+# Edit .env locally first. Never commit .env.
+sops --filename-override .env.enc --encrypt .env > .env.enc
+```
+
+Then verify decryption before committing:
+
+```bash
+./scripts/bootstrap-env.sh
+```
+
+To add another maintainer:
+
+1. Ask them to generate an `age` key:
+
+   ```bash
+   age-keygen -o ~/.config/sops/age/keys.txt
+   ```
+
+2. Ask them for the public key printed by `age-keygen`, for example `age1...`.
+3. Add that public key to `.sops.yaml`.
+4. Re-encrypt `.env.enc`.
+5. Commit `.sops.yaml` and `.env.enc`.
+
+Do not commit private `age` keys. Do not paste secret values in issues, pull requests, commit messages, logs, or chat.
+
 ### Running the .NET app locally (hot-reload / debug)
 
 Use this when you want to run the .NET app with `dotnet run` while keeping the dependencies (PostgreSQL, MinIO, AI service) in Docker.
